@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MECHENG 461 · Cruise Control over Hills</title>
+<style>
+  /* ---- Instrument-cluster aesthetic: navy panel, maize accent, mono telemetry ---- */
+  :root{
+    --navy:#00274C;        /* Michigan blue  */
+    --navy-2:#0A1B33;
+    --panel:#102A4C;
+    --maize:#FFCB05;       /* Michigan maize */
+    --cyan:#57C7FF;        /* measured signal */
+    --ink:#EAF1FB;
+    --muted:#8AA6C6;
+    --grid:rgba(138,166,198,.16);
+    --good:#5BD6A0;
+    --bad:#FF6B6B;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--navy-2);}
+  body{background:linear-gradient(180deg,#0B1A30,#08111F 60%);color:var(--ink);font-family:var(--sans);
+       -webkit-font-smoothing:antialiased;padding:22px;min-height:100vh}
+  .wrap{max-width:1180px;margin:0 auto}
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:4px}
+  header .tag{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--maize);
+              border:1px solid rgba(255,203,5,.35);padding:3px 8px;border-radius:4px}
+  h1{font-size:20px;font-weight:650;margin:0;letter-spacing:.01em}
+  header .sub{color:var(--muted);font-size:13px}
+  .grid{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;margin-top:16px}
+  @media(max-width:920px){.grid{grid-template-columns:1fr}}
+  .card{background:linear-gradient(180deg,var(--panel),#0C2140);border:1px solid rgba(138,166,198,.16);
+        border-radius:12px;padding:14px}
+  .card h2{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+           color:var(--muted);margin:0 0 10px;font-weight:600}
+  canvas{display:block;width:100%;border-radius:8px}
+  #scene{background:linear-gradient(180deg,#0d2a52,#0a1830)}
+  .charts{display:grid;gap:12px;margin-top:12px}
+  /* controls */
+  .readouts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+  .ro{background:#0A1D38;border:1px solid rgba(138,166,198,.14);border-radius:8px;padding:8px 10px}
+  .ro .k{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+  .ro .v{font-family:var(--mono);font-size:19px;font-weight:600;margin-top:2px}
+  .ro .v small{font-size:11px;color:var(--muted);font-weight:400}
+  .slider{margin:11px 0}
+  .slider label{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
+  .slider label .val{font-family:var(--mono);color:var(--maize)}
+  input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:3px;
+    background:linear-gradient(90deg,var(--maize) 0%,var(--maize) var(--fill,30%),#20406b var(--fill,30%));outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--ink);border:2px solid var(--maize);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--ink);
+    border:2px solid var(--maize);cursor:pointer}
+  .btns{display:flex;gap:8px;margin-top:6px}
+  button{font-family:var(--sans);font-size:13px;font-weight:600;border:1px solid rgba(138,166,198,.25);
+    background:#122f52;color:var(--ink);padding:8px 14px;border-radius:8px;cursor:pointer;transition:.12s}
+  button:hover{background:#173a66}
+  button.primary{background:var(--maize);color:#08213f;border-color:transparent}
+  button.primary:hover{filter:brightness(1.06)}
+  .editor{margin-top:12px}
+  .editor textarea{width:100%;height:150px;background:#08182f;color:#cfe3ff;border:1px solid rgba(138,166,198,.2);
+    border-radius:8px;padding:10px;font-family:var(--mono);font-size:12px;line-height:1.5;resize:vertical;tab-size:2}
+  .editor .row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px}
+  .hint{font-size:12px;color:var(--muted);line-height:1.5}
+  #err{font-family:var(--mono);font-size:12px;color:var(--bad);min-height:16px;margin-top:6px;white-space:pre-wrap}
+  .pill{font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:20px}
+  .pill.sat{background:rgba(255,107,107,.18);color:var(--bad)}
+  .pill.ok{background:rgba(91,214,160,.16);color:var(--good)}
+  footer{color:var(--muted);font-size:12px;margin-top:16px;line-height:1.6}
+  code{font-family:var(--mono);background:#0a1d38;padding:1px 5px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="tag">MECHENG&nbsp;461</span>
+    <h1>Cruise Control over Hills</h1>
+    <span class="sub">design a controller so the car holds its target speed as the grade fights back</span>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT: the plant -->
+    <div class="card">
+      <h2>Plant · point-mass vehicle on a graded road</h2>
+      <canvas id="scene" height="300"></canvas>
+      <div class="charts">
+        <canvas id="chartV" height="150"></canvas>
+        <canvas id="chartU" height="120"></canvas>
+      </div>
+    </div>
+
+    <!-- RIGHT: the controller -->
+    <div class="card">
+      <h2>Controller · your design</h2>
+      <div class="readouts">
+        <div class="ro"><div class="k">Speed</div><div class="v"><span id="roV">0.0</span><small> m/s</small></div></div>
+        <div class="ro"><div class="k">Error</div><div class="v"><span id="roE">0.0</span><small> m/s</small></div></div>
+        <div class="ro"><div class="k">Effort <span id="satPill" class="pill ok">OK</span></div><div class="v"><span id="roU">0</span><small> N</small></div></div>
+      </div>
+
+      <div class="slider"><label>Target speed <span class="val"><span id="lVref">20</span> m/s</span></label>
+        <input id="vref" type="range" min="0" max="35" step="1" value="20"></div>
+      <div class="slider"><label>K<sub>p</sub> — proportional <span class="val" id="lKp">800</span></label>
+        <input id="Kp" type="range" min="0" max="3000" step="10" value="800"></div>
+      <div class="slider"><label>K<sub>i</sub> — integral <span class="val" id="lKi">120</span></label>
+        <input id="Ki" type="range" min="0" max="1500" step="10" value="120"></div>
+      <div class="slider"><label>K<sub>d</sub> — derivative <span class="val" id="lKd">60</span></label>
+        <input id="Kd" type="range" min="0" max="600" step="5" value="60"></div>
+      <div class="slider"><label>Hill severity <span class="val" id="lHill">1.0</span></label>
+        <input id="hill" type="range" min="0" max="2" step="0.05" value="1"></div>
+
+      <div class="btns">
+        <button id="play" class="primary">Pause</button>
+        <button id="reset">Reset</button>
+      </div>
+
+      <div class="editor">
+        <h2 style="margin-top:14px">Controller code · edit &amp; apply</h2>
+        <textarea id="code" spellcheck="false"></textarea>
+        <div class="row">
+          <span class="hint">Return the drive force <code>u</code> (N). Auto-clamped to ±<span id="umaxLbl">8000</span> N.</span>
+          <button id="apply">Apply</button>
+        </div>
+        <div id="err"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <strong>The model.</strong>&nbsp; State <code>[s, v]</code>, dynamics
+    <code>m·v̇ = u − m·g·sin θ(s) − c·v</code>, integrated with fixed-step RK4 at 100&nbsp;Hz.
+    The road grade <code>θ(s)</code> is a persistent disturbance the integral term must reject.
+    Everything here runs in your browser — no server, no install.
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   1. MODEL  —  ẋ = f(x,u).  This is the "plant" students control.
+   ============================================================ */
+const g = 9.81;
+const P = { m:1200, c:40, umax:8000, hill:1.0 };   // physical params
+const R = { vref:20, Kp:800, Ki:120, Kd:60 };      // reference + gains
+
+// Road height h(s) and its slope dh/ds. Slope -> gravity disturbance.
+function heightSlope(s){
+  const A = P.hill;
+  const h  = A*( 6*Math.sin(s/50) + 3*Math.sin(s/23 + 1) );
+  const dh = A*( (6/50)*Math.cos(s/50) + (3/23)*Math.cos(s/23 + 1) );
+  return { h, dh };
+}
+function deriv(st, u){
+  const theta = Math.atan(heightSlope(st.s).dh);
+  const vdot  = (u - P.m*g*Math.sin(theta) - P.c*st.v) / P.m;
+  return { sdot: st.v, vdot };
+}
+function rk4(st, u, dt){                            // classic 4th-order Runge–Kutta
+  const k1 = deriv(st, u);
+  const k2 = deriv({s:st.s+0.5*dt*k1.sdot, v:st.v+0.5*dt*k1.vdot}, u);
+  const k3 = deriv({s:st.s+0.5*dt*k2.sdot, v:st.v+0.5*dt*k2.vdot}, u);
+  const k4 = deriv({s:st.s+dt*k3.sdot,     v:st.v+dt*k3.vdot},     u);
+  return { s: st.s+(dt/6)*(k1.sdot+2*k2.sdot+2*k3.sdot+k4.sdot),
+           v: st.v+(dt/6)*(k1.vdot+2*k2.vdot+2*k3.vdot+k4.vdot) };
+}
+
+/* ============================================================
+   2. CONTROLLER  —  the part the student writes.
+      Compiled from the text box into a live function.
+   ============================================================ */
+const DEFAULT_CODE =
+`// A PID controller. 'mem' persists between calls; use it for state.
+//   x   : { s, v }        current state  (position m, speed m/s)
+//   ref : target speed    (m/s)
+//   p   : { Kp, Ki, Kd, m, c, umax }
+//   mem : {}              scratch object that survives across steps
+//   dt  : timestep        (s)
+
+const e = ref - x.v;                     // speed error
+mem.I  = (mem.I || 0) + e * dt;          // integral of error
+const dedt = (e - (mem.e_prev ?? e)) / dt;
+mem.e_prev = e;
+
+return p.Kp*e + p.Ki*mem.I + p.Kd*dedt;  // drive force (N)`;
+
+let controllerFn = null, mem = {};
+function compile(src){
+  try{
+    const fn = new Function('x','ref','p','mem','dt', src);
+    fn({s:0,v:0}, R.vref, {...P,...R}, {}, 0.01);   // smoke-test one call
+    controllerFn = fn; mem = {}; setErr(''); return true;
+  }catch(err){ setErr('⚠ ' + err.message); return false; }
+}
+
+/* ============================================================
+   3. SIM LOOP  —  fixed timestep, decoupled from render rate.
+   ============================================================ */
+const SIM_DT = 0.01, MAX_STEPS = 40;
+let st, t, running = true, lastU = 0, saturated = false, acc = 0, lastWall = 0;
+const hist = [];                                    // rolling telemetry buffer
+const WINDOW = 18;                                  // seconds shown on charts
+const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
+
+function resetSim(){
+  st = {s:0, v:0}; t = 0; lastU = 0; hist.length = 0; mem = {}; acc = 0; lastWall = performance.now();
+}
+function stepOnce(){
+  const params = {Kp:R.Kp, Ki:R.Ki, Kd:R.Kd, m:P.m, c:P.c, umax:P.umax};
+  let u = 0;
+  try{ u = controllerFn(st, R.vref, params, mem, SIM_DT); }
+  catch(err){ setErr('⚠ runtime: ' + err.message); running = false; syncPlay(); return; }
+  if(!isFinite(u)) u = 0;
+  const uc = clamp(u, -P.umax, P.umax);
+  saturated = Math.abs(uc - u) > 1e-6;
+  lastU = uc;
+  st = rk4(st, uc, SIM_DT);
+  t += SIM_DT;
+  hist.push({t, v:st.v, vref:R.vref, u:uc});
+  while(hist.length && hist[0].t < t - WINDOW) hist.shift();
+}
+
+/* ============================================================
+   4. RENDER  —  hand-drawn canvas (no libraries -> deploys anywhere).
+   ============================================================ */
+const scene = document.getElementById('scene');
+const chartV = document.getElementById('chartV');
+const chartU = document.getElementById('chartU');
+function fitDPR(cv){
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w*dpr; cv.height = h*dpr;
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx, w, h};
+}
+function drawScene(){
+  const {ctx,w,h} = fitDPR(scene);
+  ctx.clearRect(0,0,w,h);
+  const PPM = w/120;                                // px per metre (≈120 m visible)
+  const camS = st.s - 42;                           // keep car ~35% from left
+  const midY = h*0.62, VEX = PPM;                   // vertical scale (exaggeration 1:1)
+  const sx = s => (s - camS)*PPM;
+  const sy = hgt => midY - hgt*VEX;
+
+  // road fill
+  ctx.beginPath();
+  for(let px=0; px<=w; px+=4){
+    const s = camS + px/PPM;
+    px===0 ? ctx.moveTo(px, sy(heightSlope(s).h)) : ctx.lineTo(px, sy(heightSlope(s).h));
+  }
+  ctx.lineTo(w,h); ctx.lineTo(0,h); ctx.closePath();
+  const grd = ctx.createLinearGradient(0,midY-80,0,h);
+  grd.addColorStop(0,'#16406e'); grd.addColorStop(1,'#0a1d38');
+  ctx.fillStyle = grd; ctx.fill();
+  // road surface line
+  ctx.beginPath();
+  for(let px=0; px<=w; px+=4){
+    const s = camS + px/PPM;
+    px===0 ? ctx.moveTo(px, sy(heightSlope(s).h)) : ctx.lineTo(px, sy(heightSlope(s).h));
+  }
+  ctx.strokeStyle = '#3d6ea0'; ctx.lineWidth = 2; ctx.stroke();
+  // distance ticks
+  ctx.fillStyle = 'rgba(138,166,198,.5)'; ctx.font = '10px ui-monospace,monospace';
+  for(let s=Math.ceil(camS/25)*25; s<camS+120; s+=25){
+    const {h:hh}=heightSlope(s);
+    ctx.fillText(s+' m', sx(s)+2, sy(hh)-6);
+  }
+
+  // the car, tilted to the local grade
+  const cs = st.s, {h:ch,dh}=heightSlope(cs), ang = Math.atan(dh);
+  ctx.save();
+  ctx.translate(sx(cs), sy(ch)-9);
+  ctx.rotate(-ang);
+  // body
+  ctx.fillStyle = '#FFCB05';
+  roundRect(ctx,-16,-11,32,14,4); ctx.fill();
+  ctx.fillStyle = '#123a63';
+  roundRect(ctx,-7,-9,15,7,2); ctx.fill();          // cabin
+  // wheels
+  ctx.fillStyle='#0c1626';
+  ctx.beginPath();ctx.arc(-9,4,4.2,0,7);ctx.arc(9,4,4.2,0,7);ctx.fill();
+  ctx.fillStyle='#5b7ea6';
+  ctx.beginPath();ctx.arc(-9,4,1.6,0,7);ctx.arc(9,4,1.6,0,7);ctx.fill();
+  ctx.restore();
+
+  // speed HUD on car
+  ctx.fillStyle = 'rgba(234,241,251,.9)'; ctx.font='600 12px ui-monospace,monospace';
+  ctx.fillText(st.v.toFixed(1)+' m/s', sx(cs)-18, sy(ch)-30);
+}
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
+}
+function drawStrip(cv, key, opts){
+  const {ctx,w,h} = fitDPR(cv);
+  ctx.clearRect(0,0,w,h);
+  const padL=42,padR=10,padT=14,padB=18, W=w-padL-padR, H=h-padT-padB;
+  // y-range
+  let lo=opts.min, hi=opts.max;
+  if(opts.auto){
+    lo=Infinity;hi=-Infinity;
+    for(const p of hist){const val=p[key]; lo=Math.min(lo,val,opts.pad?-opts.pad:val); hi=Math.max(hi,val,opts.pad||val);}
+    if(!isFinite(lo)){lo=-1;hi=1;} const m=(hi-lo)*0.15||1; lo-=m;hi+=m;
+  }
+  const X = tt => padL + ((tt-(t-WINDOW))/WINDOW)*W;
+  const Y = vv => padT + (1-(vv-lo)/(hi-lo))*H;
+  // grid + labels
+  ctx.strokeStyle='rgba(138,166,198,.14)';ctx.fillStyle='rgba(138,166,198,.6)';
+  ctx.font='10px ui-monospace,monospace';ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const vv=lo+(hi-lo)*i/4, y=Y(vv);
+    ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(w-padR,y);ctx.stroke();
+    ctx.fillText(vv.toFixed(opts.dec??0),4,y+3);
+  }
+  ctx.fillStyle='var(--muted)';ctx.fillStyle='rgba(138,166,198,.75)';
+  ctx.fillText(opts.title,padL+2,10);
+  // reference line (speed chart)
+  if(opts.refKey){
+    ctx.strokeStyle='rgba(255,203,5,.85)';ctx.lineWidth=1.5;ctx.setLineDash([5,4]);
+    ctx.beginPath();
+    hist.forEach((p,i)=>{const x=X(p.t),y=Y(p[opts.refKey]);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+    ctx.stroke();ctx.setLineDash([]);
+  }
+  // signal
+  ctx.strokeStyle=opts.color;ctx.lineWidth=2;ctx.beginPath();
+  hist.forEach((p,i)=>{const x=X(p.t),y=Y(clamp(p[key],lo,hi));i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+  ctx.stroke();
+}
+
+/* ============================================================
+   5. MAIN LOOP  —  requestAnimationFrame + accumulator.
+   ============================================================ */
+function frame(now){
+  if(running){
+    let dtWall = (now - lastWall)/1000; lastWall = now;
+    if(dtWall>0.25) dtWall = 0.25;                  // avoid spiral after a tab-switch
+    acc += dtWall;
+    let n=0;
+    while(acc >= SIM_DT && n < MAX_STEPS){ stepOnce(); acc -= SIM_DT; n++; }
+  } else { lastWall = now; }
+  drawScene();
+  drawStrip(chartV,'v',{title:'SPEED  (— measured   – – target)',color:'#57C7FF',
+                        refKey:'vref',min:0,max:38,dec:0});
+  drawStrip(chartU,'u',{title:'CONTROL EFFORT  u (N)',color:'#5BD6A0',auto:true,pad:P.umax,dec:0});
+  // readouts
+  document.getElementById('roV').textContent = st.v.toFixed(1);
+  document.getElementById('roE').textContent = (R.vref-st.v).toFixed(1);
+  document.getElementById('roU').textContent = Math.round(lastU);
+  const pill=document.getElementById('satPill');
+  pill.textContent = saturated?'SAT':'OK'; pill.className='pill '+(saturated?'sat':'ok');
+  requestAnimationFrame(frame);
+}
+
+/* ============================================================
+   6. UI WIRING
+   ============================================================ */
+function setErr(m){document.getElementById('err').textContent=m;}
+function syncPlay(){document.getElementById('play').textContent = running?'Pause':'Play';}
+function bindSlider(id, obj, key, labelId, fmt){
+  const el=document.getElementById(id), lab=document.getElementById(labelId);
+  const upd=()=>{ obj[key]=parseFloat(el.value); if(lab) lab.textContent=fmt?fmt(obj[key]):obj[key];
+    const pct=(el.value-el.min)/(el.max-el.min)*100; el.style.setProperty('--fill',pct+'%'); };
+  el.addEventListener('input',upd); upd();
+}
+bindSlider('vref',R,'vref','lVref');
+bindSlider('Kp',R,'Kp','lKp');
+bindSlider('Ki',R,'Ki','lKi');
+bindSlider('Kd',R,'Kd','lKd');
+bindSlider('hill',P,'hill','lHill',v=>v.toFixed(1));
+
+document.getElementById('play').onclick=()=>{running=!running;syncPlay();};
+document.getElementById('reset').onclick=()=>{resetSim();};
+const codeEl=document.getElementById('code'); codeEl.value=DEFAULT_CODE;
+document.getElementById('apply').onclick=()=>{ if(compile(codeEl.value)) resetSim(); };
+codeEl.addEventListener('keydown',e=>{ if(e.key==='Tab'){e.preventDefault();
+  const s=codeEl.selectionStart; codeEl.value=codeEl.value.slice(0,s)+'  '+codeEl.value.slice(codeEl.selectionEnd);
+  codeEl.selectionStart=codeEl.selectionEnd=s+2; }});
+document.getElementById('umaxLbl').textContent=P.umax;
+
+// boot
+compile(DEFAULT_CODE);
+resetSim();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

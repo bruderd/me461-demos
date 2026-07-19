@@ -1,0 +1,53 @@
+name: Deploy site to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install JupyterLite
+        run: pip install jupyterlite-core jupyterlite-pyodide-kernel
+
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          # static landing page + JS demos (copied verbatim)
+          cp index.html _site/index.html
+          cp -r demos _site/demos
+          # JupyterLite build -> _site/notebooks (served from the repo subpath)
+          jupyter lite build \
+            --contents notebooks/content \
+            --output-dir _site/notebooks
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,5 @@
+_site/
+.jupyterlite.doit.db
+**/.ipynb_checkpoints/
+.DS_Store
+node_modules/
