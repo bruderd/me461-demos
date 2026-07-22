@@ -81,7 +81,7 @@
   .ro{background:#0A1D38;border:1px solid rgba(138,166,198,.14);border-radius:8px;padding:6px 10px}
   .ro .k{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
   .ro .v{font-family:var(--mono);font-size:15px;font-weight:600;margin-top:1px}
-  .ro.xt .k{color:var(--maize)}
+  .ro.xtro .k{color:var(--maize)}
 
   .btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   button{font-family:var(--sans);font-size:13px;font-weight:600;border:1px solid rgba(138,166,198,.25);
@@ -99,11 +99,18 @@
   .toggle{display:inline-flex;border:1px solid rgba(138,166,198,.28);border-radius:7px;overflow:hidden;margin-left:auto}
   .toggle button{border:0;border-radius:0;padding:5px 11px;font-size:12px;background:#0a1d38;color:var(--muted)}
   .toggle button.on{background:var(--maize);color:#08213f}
+  /* x with a tilde centred over it (combining marks drift when followed by a space) */
+  .xt{position:relative;display:inline-block}
+  .xt::after{content:"~";position:absolute;left:0;right:0;top:-.28em;text-align:center;font-size:.78em;line-height:1;font-weight:700}
 
   /* ---- two columns · phase over time ---- */
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media(max-width:820px){.grid{grid-template-columns:1fr}}
   .col{display:flex;flex-direction:column;gap:16px}
+  /* keep both phase cards identical height so the two columns line up row-for-row */
+  .phcard h2{min-height:24px}
+  .phcard .axisrow{min-height:32px}
+  .phcard .status{min-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .badge{font-family:var(--mono);font-size:10px;letter-spacing:.08em;padding:2px 7px;border-radius:5px}
   .badge.nl{color:var(--cyan);border:1px solid rgba(87,199,255,.4)}
   .badge.lin{color:var(--maize);border:1px solid rgba(255,203,5,.4)}
@@ -168,7 +175,7 @@
     </div>
     <div class="readouts">
       <div class="ro"><div class="k">state x</div><div class="v" id="roX">—</div></div>
-      <div class="ro xt"><div class="k">state x̃</div><div class="v" id="roXt">—</div></div>
+      <div class="ro xtro"><div class="k">state x̃</div><div class="v" id="roXt">—</div></div>
       <div class="ro"><div class="k">t</div><div class="v" id="roT">0.00</div></div>
     </div>
     <div class="btns">
@@ -182,7 +189,7 @@
 
     <!-- LEFT: nonlinear -->
     <div class="col">
-      <div class="card">
+      <div class="card phcard">
         <h2><span class="badge nl">NONLINEAR</span> Phase portrait · x₁→x₂
             <span class="note">scroll = zoom · drag = pan · click = set x(0)</span></h2>
         <div class="axisrow">
@@ -204,16 +211,16 @@
 
     <!-- RIGHT: linearized -->
     <div class="col">
-      <div class="card">
+      <div class="card phcard">
         <h2><span class="badge lin">LINEARIZED</span> Phase portrait
-            <span class="note">scroll = zoom · drag = pan · click = set IC</span>
-            <span class="toggle">
-              <button id="frXt" class="on">x̃ frame</button>
-              <button id="frX">x frame</button>
-            </span></h2>
+            <span class="note">scroll = zoom · drag = pan · click = set IC</span></h2>
         <div class="axisrow">
           <span class="grp"><span class="al" id="ral1">x̃₁</span><input id="rx1min" type="number" step="any"><input id="rx1max" type="number" step="any"></span>
           <span class="grp"><span class="al" id="ral2">x̃₂</span><input id="rx2min" type="number" step="any"><input id="rx2max" type="number" step="any"></span>
+          <span class="toggle">
+            <button id="frXt" class="on"><span class="xt">x</span> frame</button>
+            <button id="frX">x frame</button>
+          </span>
         </div>
         <canvas id="phaseR" class="phase" height="340"></canvas>
         <div class="status" id="statR"></div>
@@ -720,7 +727,7 @@ attachPhase(el('phaseR'),()=>viewR[rightFrame],(a,b)=>{
   if(!Tf_){ setIC(a,b); return; }
   const r=invT(a,b,[pendingIC||{x1:0,x2:0},{x1:0,x2:0},{x1:a,x2:b}]); // x̃-frame: invert the transform
   if(r.ok) setIC(r.x1,r.x2);
-  else flash('Could not invert the transform at that x̃ — try the nonlinear plot or type x(0).');
+  else flash('Could not invert T there — click the x plot or type x(0).');
 });
 
 /* ================================================================
