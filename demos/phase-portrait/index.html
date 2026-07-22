@@ -68,6 +68,8 @@
   .field{display:flex;flex-direction:column;gap:4px}
   .field .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
   .field input{width:92px}
+  .field.ic .k{color:var(--maize)}
+  .field.ic input{border-color:rgba(255,203,5,.4)}
   .readouts{display:flex;gap:8px;flex-wrap:wrap}
   .ro{background:#0A1D38;border:1px solid rgba(138,166,198,.14);border-radius:8px;padding:6px 10px}
   .ro .k{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
@@ -132,9 +134,10 @@
       <div class="field"><span class="k">x₂ min</span><input id="x2min" type="number" step="any" value="-5"></div>
       <div class="field"><span class="k">x₂ max</span><input id="x2max" type="number" step="any" value="5"></div>
       <div class="field"><span class="k">Duration&nbsp;(s)</span><input id="dur" type="number" step="any" min="0.5" value="20"></div>
+      <div class="field ic"><span class="k">x₁(0)</span><input id="ic1" type="number" step="any" value="2"></div>
+      <div class="field ic"><span class="k">x₂(0)</span><input id="ic2" type="number" step="any" value="2.5"></div>
     </div>
     <div class="readouts">
-      <div class="ro"><div class="k">x(0)</div><div class="v" id="roIC">—</div></div>
       <div class="ro"><div class="k">state x</div><div class="v" id="roCur">—</div></div>
       <div class="ro"><div class="k">t</div><div class="v" id="roT">0.00</div></div>
     </div>
@@ -492,8 +495,11 @@ function step(now){
   renderPhase(); renderTime(); updateReadouts();
   requestAnimationFrame(step);
 }
+function syncICFields(){                              // reflect pendingIC into the x₁(0)/x₂(0) boxes
+  if(!pendingIC) return;
+  el('ic1').value=+pendingIC.x1.toFixed(4); el('ic2').value=+pendingIC.x2.toFixed(4);
+}
 function updateReadouts(override){
-  el('roIC').textContent = pendingIC ? `(${fmt(pendingIC.x1)}, ${fmt(pendingIC.x2)})` : '—';
   let cur=override;
   if(!cur && current){ const p=current.pts[clamp(Math.floor(current.idx),0,current.pts.length-1)]; cur=p; }
   if(cur){ el('roCur').textContent=`(${fmt(cur.x1)}, ${fmt(cur.x2)})`; el('roT').textContent=(cur.t??0).toFixed(2); }
@@ -525,7 +531,7 @@ window.addEventListener('mouseup',e=>{
   if(!down) return;
   if(!down.moved && !animating){                    // a click (no drag) → place the initial condition
     const M=metrics(), [x1,x2]=P2D(down.x,down.y,M);
-    pendingIC={x1,x2}; setStatus('Initial condition set — press Simulate ▶'); updateReadouts(); renderPhase();
+    pendingIC={x1,x2}; setStatus('Initial condition set — press Simulate ▶'); syncICFields(); renderPhase();
   }
   down=null;
 });
@@ -560,6 +566,13 @@ function readFields(){
 }
 ['x1min','x1max','x2min','x2max','dur'].forEach(id=>el(id).addEventListener('change',readFields));
 
+// typing an exact initial condition moves the crosshair (mirror of clicking the plot)
+['ic1','ic2'].forEach(id=>el(id).addEventListener('change',()=>{
+  const a=parseFloat(el('ic1').value), b=parseFloat(el('ic2').value);
+  if(!isFinite(a)||!isFinite(b)) return;
+  pendingIC={x1:a,x2:b}; setStatus('Initial condition set — press Simulate ▶'); renderPhase();
+}));
+
 el('render').onclick=()=>{ if(compile()) renderPhase(); };
 [el('f1'),el('f2')].forEach(inp=>inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ if(compile()) renderPhase(); }}));
 el('sim').onclick=simulate;
@@ -569,7 +582,7 @@ el('clear').onclick=()=>{ traces.length=0; current=null; colorIx=0; setStatus('T
    10. BOOT
    ================================================================ */
 window.addEventListener('resize',()=>{ renderPhase(); renderTime(); });
-compile(); syncFields();
+compile(); syncFields(); syncICFields();
 setStatus('Initial condition set — press Simulate ▶'); updateReadouts();
 renderPhase(); renderTime();
 </script>
