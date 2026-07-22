@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MECHENG 461 · Phase Portrait Explorer</title>
+<style>
+  /* ---- Instrument-cluster aesthetic: navy panel, maize accent, mono telemetry ---- */
+  :root{
+    --navy:#00274C; --navy-2:#0A1B33; --panel:#102A4C;
+    --maize:#FFCB05; --cyan:#57C7FF; --ink:#EAF1FB; --muted:#8AA6C6;
+    --grid:rgba(138,166,198,.16); --good:#5BD6A0; --bad:#FF6B6B;
+    --x1:#57C7FF;          /* time-response colour for state x1 */
+    --x2:#FFCB05;          /* time-response colour for state x2 */
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--navy-2)}
+  body{background:linear-gradient(180deg,#0B1A30,#08111F 60%);color:var(--ink);font-family:var(--sans);
+       -webkit-font-smoothing:antialiased;padding:22px;min-height:100vh}
+  .wrap{max-width:1180px;margin:0 auto}
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:4px}
+  header .tag{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--maize);
+              border:1px solid rgba(255,203,5,.35);padding:3px 8px;border-radius:4px}
+  h1{font-size:20px;font-weight:650;margin:0;letter-spacing:.01em}
+  header .sub{color:var(--muted);font-size:13px}
+  .card{background:linear-gradient(180deg,var(--panel),#0C2140);border:1px solid rgba(138,166,198,.16);
+        border-radius:12px;padding:14px;margin-top:16px}
+  .card h2{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+           color:var(--muted);margin:0 0 10px;font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .card h2 .note{font-family:var(--sans);letter-spacing:0;text-transform:none;font-size:11px;color:var(--muted);font-weight:400}
+  canvas{display:block;width:100%;height:460px;border-radius:8px}
+  @media(max-width:820px){canvas{height:360px}}
+  #phase{background:radial-gradient(120% 120% at 50% 40%,#0d2a52,#0a1830);cursor:crosshair;touch-action:none}
+  #time{background:linear-gradient(180deg,#0d2a52,#0a1830)}
+
+  /* ---- system definition ---- */
+  .eqs{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end}
+  @media(max-width:820px){.eqs{grid-template-columns:1fr}}
+  .eq{display:flex;flex-direction:column;gap:4px}
+  .eq .lab{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .eq .lab b{color:var(--ink)}
+  input[type=text],input[type=number]{background:#08182f;color:#cfe3ff;border:1px solid rgba(138,166,198,.2);
+    border-radius:8px;padding:9px 10px;font-family:var(--mono);font-size:14px;width:100%}
+  input[type=text]:focus,input[type=number]:focus{outline:none;border-color:rgba(255,203,5,.6)}
+  #err{font-family:var(--mono);font-size:12px;color:var(--bad);min-height:15px;margin-top:8px;white-space:pre-wrap}
+  .hint{font-size:12px;color:var(--muted);line-height:1.55;margin-top:8px}
+  code{font-family:var(--mono);background:#0a1d38;padding:1px 5px;border-radius:4px;font-size:12px}
+
+  /* ---- parameter sliders (auto-generated) ---- */
+  .params{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px 16px;margin-top:12px}
+  .params:empty{display:none}
+  .prm label{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12px;margin-bottom:5px}
+  .prm label b{color:var(--maize)}
+  .prm .lo{display:flex;gap:8px;align-items:center}
+  .prm input[type=number]{width:74px;padding:5px 7px;font-size:12px}
+  input[type=range]{-webkit-appearance:none;flex:1;height:4px;border-radius:3px;
+    background:linear-gradient(90deg,var(--maize) 0%,var(--maize) var(--fill,50%),#20406b var(--fill,50%));outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--ink);border:2px solid var(--maize);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--ink);
+    border:2px solid var(--maize);cursor:pointer}
+
+  /* ---- view controls ---- */
+  .ctrls{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;justify-content:space-between}
+  .fields{display:flex;gap:12px;flex-wrap:wrap}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  .field input{width:92px}
+  .readouts{display:flex;gap:8px;flex-wrap:wrap}
+  .ro{background:#0A1D38;border:1px solid rgba(138,166,198,.14);border-radius:8px;padding:6px 10px}
+  .ro .k{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  .ro .v{font-family:var(--mono);font-size:15px;font-weight:600;margin-top:1px}
+
+  .btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  button{font-family:var(--sans);font-size:13px;font-weight:600;border:1px solid rgba(138,166,198,.25);
+    background:#122f52;color:var(--ink);padding:9px 15px;border-radius:8px;cursor:pointer;transition:.12s}
+  button:hover{background:#173a66}
+  button.primary{background:var(--maize);color:#08213f;border-color:transparent}
+  button.primary:hover{filter:brightness(1.06)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+
+  /* ---- plots side by side ---- */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  .legend{display:flex;gap:12px;margin-left:auto}
+  .legend span{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .legend i{width:14px;height:3px;border-radius:2px;display:inline-block}
+  .status{font-size:12px;color:var(--muted);min-height:15px}
+  .status.warn{color:var(--maize)}
+  footer{color:var(--muted);font-size:12px;margin-top:16px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="tag">MECHENG&nbsp;461</span>
+    <h1>Phase Portrait Explorer</h1>
+    <span class="sub">enter a 2-D system ẋ = f(x), read its flow, drop initial conditions and watch them run</span>
+  </header>
+
+  <!-- ============ SYSTEM DEFINITION ============ -->
+  <div class="card">
+    <h2>System · ẋ = f(x) <span class="note">edit the right-hand sides, then Render field</span></h2>
+    <div class="eqs">
+      <div class="eq">
+        <span class="lab"><b>ẋ<sub>1</sub></b> =&nbsp; (function of x1, x2)</span>
+        <input id="f1" type="text" spellcheck="false" value="x2">
+      </div>
+      <div class="eq">
+        <span class="lab"><b>ẋ<sub>2</sub></b> =&nbsp; (function of x1, x2)</span>
+        <input id="f2" type="text" spellcheck="false" value="-b*x2 - c*sin(x1)">
+      </div>
+      <button id="render" class="primary">Render field</button>
+    </div>
+    <div id="err"></div>
+    <div id="params" class="params"></div>
+    <div class="hint">
+      Write the states as <code>x1</code>,<code>x2</code> (or <code>x_1</code>,<code>x_2</code>). Available:
+      <code>sin cos tan exp log sqrt abs sign atan2 …</code>, <code>pi</code>, and <code>^</code> for powers.
+      Any other letter (e.g. <code>b</code>, <code>c</code>) becomes a <b>tunable parameter</b> with a slider —
+      drag it and the field morphs live. <code>t</code> is time (for forced systems; the field is drawn at t = 0).
+    </div>
+  </div>
+
+  <!-- ============ VIEW CONTROLS ============ -->
+  <div class="card ctrls">
+    <div class="fields">
+      <div class="field"><span class="k">x₁ min</span><input id="x1min" type="number" step="any" value="-7"></div>
+      <div class="field"><span class="k">x₁ max</span><input id="x1max" type="number" step="any" value="7"></div>
+      <div class="field"><span class="k">x₂ min</span><input id="x2min" type="number" step="any" value="-5"></div>
+      <div class="field"><span class="k">x₂ max</span><input id="x2max" type="number" step="any" value="5"></div>
+      <div class="field"><span class="k">Duration&nbsp;(s)</span><input id="dur" type="number" step="any" min="0.5" value="20"></div>
+    </div>
+    <div class="readouts">
+      <div class="ro"><div class="k">x(0)</div><div class="v" id="roIC">—</div></div>
+      <div class="ro"><div class="k">state x</div><div class="v" id="roCur">—</div></div>
+      <div class="ro"><div class="k">t</div><div class="v" id="roT">0.00</div></div>
+    </div>
+    <div class="btns">
+      <button id="sim" class="primary">Simulate ▶</button>
+      <button id="clear">Clear traces</button>
+    </div>
+  </div>
+
+  <!-- ============ PLOTS ============ -->
+  <div class="grid">
+    <div class="card">
+      <h2>Phase portrait · x₁ → x₂ <span class="note">scroll = zoom · drag = pan · click = set x(0)</span></h2>
+      <canvas id="phase" height="470"></canvas>
+      <div class="status" id="pstatus"></div>
+    </div>
+    <div class="card">
+      <h2>Time response
+        <span class="legend">
+          <span><i style="background:var(--x1)"></i>x₁(t)</span>
+          <span><i style="background:var(--x2)"></i>x₂(t)</span>
+        </span>
+      </h2>
+      <canvas id="time" height="470"></canvas>
+      <div class="status">two states vs. time, over the duration set above</div>
+    </div>
+  </div>
+
+  <footer>
+    <strong>How it works.</strong>&nbsp; The vector field samples ẋ = f(x) on a grid; each arrow points along the
+    local flow with <em>length proportional to speed</em> |ẋ|. Trajectories are integrated with fixed-step 4th-order
+    Runge–Kutta from the initial condition you click. Every trace stays until you <em>Clear</em>. All client-side — no
+    server, no install.
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ================================================================
+   0. STATE
+   ================================================================ */
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const view={x1min:-7,x1max:7,x2min:-5,x2max:5};   // current phase-plot window (data units)
+let   T=20;                                        // sim duration & time-axis span (s)
+let   Ffn=null;                                    // compiled dynamics: (x1,x2,t) -> [f1,f2]
+const params={};                                   // name -> value
+let   paramMeta={};                                // name -> {min,max}
+let   pendingIC={x1:2,x2:2.5};                     // the initial condition awaiting simulation
+const traces=[];                                   // committed trajectories: {pts:[{t,x1,x2}], color}
+let   current=null;                                // trajectory being animated: {pts, color, idx}
+let   animating=false;
+let   colorIx=0;
+const TRACE_COLORS=['#57C7FF','#FFCB05','#5BD6A0','#FF6B6B','#B79CFF','#FF9F45','#4ADEDE','#F78FB3'];
+const nextColor=()=>TRACE_COLORS[(colorIx++)%TRACE_COLORS.length];
+
+const SIM_DT=0.01;                                 // RK4 integration step (s)
+const el=id=>document.getElementById(id);
+
+/* ================================================================
+   1. COMPILE  —  turn the two text expressions into ẋ = f(x)
+      (same live-compile idea as the cruise-control demo)
+   ================================================================ */
+const RESERVED=new Set(['x1','x2','t','pi','e','Math','PI','E','Infinity','NaN','true','false']);
+const MATHFNS=new Set(['sin','cos','tan','asin','acos','atan','atan2','sinh','cosh','tanh',
+  'exp','log','log2','log10','sqrt','cbrt','abs','sign','pow','min','max','floor','ceil','round','trunc','hypot']);
+const MATH_PRELUDE='const {abs,sign,sqrt,cbrt,exp,log,log2,log10,sin,cos,tan,asin,acos,atan,'+
+  'atan2,sinh,cosh,tanh,pow,min,max,floor,ceil,round,trunc,hypot}=Math;const pi=Math.PI,e=Math.E;';
+
+// x_1 -> x1, x_2 -> x2, and ^ -> ** (students expect ^ to mean power)
+const normalize=s=>s.replace(/x_1/g,'x1').replace(/x_2/g,'x2').replace(/\^/g,'**');
+
+function scanParams(src){
+  const found=new Set(), re=/[A-Za-z_][A-Za-z0-9_]*/g; let m;
+  while((m=re.exec(src))){
+    if(/^\s*\(/.test(src.slice(re.lastIndex))) continue;      // it's a function call, not a variable
+    if(RESERVED.has(m[0])||MATHFNS.has(m[0])) continue;
+    found.add(m[0]);
+  }
+  return found;
+}
+
+function compile(){
+  const s1=normalize(el('f1').value), s2=normalize(el('f2').value);
+  const names=[...new Set([...scanParams(s1),...scanParams(s2)])];
+  let fn;
+  try{
+    const decl=names.map(n=>`const ${n}=P[${JSON.stringify(n)}];`).join('');
+    fn=new Function('x1','x2','t','P',`${MATH_PRELUDE}${decl}return [(${s1}),(${s2})];`);
+    const test=fn(0.3,-0.2,0,Object.fromEntries(names.map(n=>[n,1])));  // smoke test
+    if(!Array.isArray(test)||!isFinite(test[0])||!isFinite(test[1])) throw new Error('did not return finite [ẋ₁, ẋ₂]');
+  }catch(err){ setErr('⚠ '+err.message); return false; }
+
+  // reconcile parameter list: keep values that already exist, default new ones to 1
+  const keep={},keepMeta={};
+  for(const n of names){
+    keep[n]     = (n in params)     ? params[n]     : (n==='b'?0.4 : n==='c'?4 : 1);
+    keepMeta[n] = (n in paramMeta)  ? paramMeta[n]  : {min:-5,max:5};
+  }
+  for(const k in params) delete params[k];   Object.assign(params,keep);
+  paramMeta=keepMeta;
+  Ffn=(x1,x2,t)=>fn(x1,x2,t,params);
+  setErr(''); buildParamUI(names); return true;
+}
+function setErr(m){ el('err').textContent=m; }
+
+/* ================================================================
+   2. PARAMETER SLIDERS  —  generated from the detected names
+   ================================================================ */
+function buildParamUI(names){
+  const box=el('params'); box.innerHTML='';
+  for(const n of names){
+    const meta=paramMeta[n];
+    const wrap=document.createElement('div'); wrap.className='prm';
+    wrap.innerHTML=
+      `<label>parameter <b>${n}</b><span class="val" data-v="${n}">${fmt(params[n])}</span></label>`+
+      `<div class="lo"><input type="range" data-r="${n}" min="${meta.min}" max="${meta.max}" step="0.01" value="${params[n]}">`+
+      `<input type="number" data-n="${n}" step="any" value="${params[n]}"></div>`;
+    box.appendChild(wrap);
+    const range=wrap.querySelector('[data-r]'), num=wrap.querySelector('[data-n]'),
+          lab=wrap.querySelector('[data-v]');
+    const paint=()=>{const pct=(range.value-range.min)/(range.max-range.min)*100;
+                     range.style.setProperty('--fill',pct+'%');};
+    range.addEventListener('input',()=>{ params[n]=+range.value; num.value=range.value;
+      lab.textContent=fmt(params[n]); paint(); renderPhase(); });
+    num.addEventListener('change',()=>{
+      let v=parseFloat(num.value); if(!isFinite(v)) return;
+      params[n]=v; lab.textContent=fmt(v);
+      if(v<meta.min){ meta.min=Math.floor(v); range.min=meta.min; }   // grow range to fit typed value
+      if(v>meta.max){ meta.max=Math.ceil(v);  range.max=meta.max; }
+      range.value=v; paint(); renderPhase();
+    });
+    paint();
+  }
+}
+const fmt=v=>Math.abs(v)>=100||v===0?v.toFixed(0):Math.abs(v)>=10?v.toFixed(1):v.toFixed(2);
+
+/* ================================================================
+   3. DYNAMICS + RK4  (data space — independent of how we draw)
+   ================================================================ */
+function rk4(s,t,dt){
+  const a=Ffn(s.x1,s.x2,t);
+  const b=Ffn(s.x1+.5*dt*a[0], s.x2+.5*dt*a[1], t+.5*dt);
+  const c=Ffn(s.x1+.5*dt*b[0], s.x2+.5*dt*b[1], t+.5*dt);
+  const d=Ffn(s.x1+dt*c[0],    s.x2+dt*c[1],    t+dt);
+  return { x1:s.x1+dt/6*(a[0]+2*b[0]+2*c[0]+d[0]),
+           x2:s.x2+dt/6*(a[1]+2*b[1]+2*c[1]+d[1]) };
+}
+function integrate(ic){
+  const total=Math.round(clamp(T,0.5,1000)/SIM_DT);
+  const every=Math.max(1,Math.round(total/1000));      // store ~1000 samples regardless of T
+  const pts=[{t:0,x1:ic.x1,x2:ic.x2}];
+  let s={x1:ic.x1,x2:ic.x2}, t=0;
+  for(let i=0;i<total;i++){
+    s=rk4(s,t,SIM_DT); t+=SIM_DT;
+    if(!isFinite(s.x1)||!isFinite(s.x2)||Math.abs(s.x1)>1e7||Math.abs(s.x2)>1e7){
+      pts.push({t,x1:s.x1,x2:s.x2}); break;             // blew up — stop cleanly
+    }
+    if(i%every===0||i===total-1) pts.push({t,x1:s.x1,x2:s.x2});
+  }
+  return pts;
+}
+
+/* ================================================================
+   4. CANVAS PLUMBING + COORDINATE TRANSFORMS
+   ================================================================ */
+const phase=el('phase'), time=el('time');
+const PAD={l:44,t:14,r:14,b:30};
+function fitDPR(cv){
+  const dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight;
+  cv.width=w*dpr; cv.height=h*dpr;
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx,w,h};
+}
+function metrics(){ const w=phase.clientWidth,h=phase.clientHeight;
+  return {w,h,W:w-PAD.l-PAD.r,H:h-PAD.t-PAD.b}; }
+function D2P(x1,x2,M){ return [ PAD.l+(x1-view.x1min)/(view.x1max-view.x1min)*M.W,
+                                PAD.t+(1-(x2-view.x2min)/(view.x2max-view.x2min))*M.H ]; }
+function P2D(px,py,M){ return [ view.x1min+(px-PAD.l)/M.W*(view.x1max-view.x1min),
+                                view.x2min+(1-(py-PAD.t)/M.H)*(view.x2max-view.x2min) ]; }
+function niceStep(span,target){
+  const raw=span/target, mag=Math.pow(10,Math.floor(Math.log10(raw))), n=raw/mag;
+  return (n<1.5?1:n<3?2:n<7?5:10)*mag;
+}
+const lerpHex=(a,b,t)=>{const A=[parseInt(a.slice(1,3),16),parseInt(a.slice(3,5),16),parseInt(a.slice(5,7),16)];
+  const B=[parseInt(b.slice(1,3),16),parseInt(b.slice(3,5),16),parseInt(b.slice(5,7),16)];
+  return `rgb(${A.map((v,i)=>Math.round(v+(B[i]-v)*t)).join(',')})`;};
+
+/* ================================================================
+   5. RENDER — PHASE PORTRAIT (grid, vector field, traces, dot, IC)
+   ================================================================ */
+function renderPhase(){
+  const {ctx}=fitDPR(phase), M=metrics();
+  ctx.clearRect(0,0,M.w,M.h);
+  drawGrid(ctx,M);
+  if(Ffn) drawField(ctx,M);
+  for(const tr of traces) drawTrace(ctx,M,tr.pts,tr.color,tr.pts.length,.85,1.6);
+  if(current) drawTrace(ctx,M,current.pts,current.color,Math.floor(current.idx)+1,1,2.2);
+  if(current) drawDot(ctx,M,current);
+  if(pendingIC && !animating) drawIC(ctx,M);
+}
+function drawGrid(ctx,M){
+  ctx.save(); ctx.beginPath(); ctx.rect(PAD.l,PAD.t,M.W,M.H); ctx.clip();
+  ctx.font='10px ui-monospace,monospace';
+  const sx=niceStep(view.x1max-view.x1min,8), sy=niceStep(view.x2max-view.x2min,7);
+  ctx.lineWidth=1;
+  for(let x=Math.ceil(view.x1min/sx)*sx; x<=view.x1max; x+=sx){
+    const[px]=D2P(x,view.x2min,M), zero=Math.abs(x)<1e-9;
+    ctx.strokeStyle=zero?'rgba(138,166,198,.5)':'rgba(138,166,198,.13)';
+    ctx.beginPath();ctx.moveTo(px,PAD.t);ctx.lineTo(px,PAD.t+M.H);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)'; ctx.fillText(fmtTick(x),px+3,PAD.t+M.H-4);
+  }
+  for(let y=Math.ceil(view.x2min/sy)*sy; y<=view.x2max; y+=sy){
+    const[,py]=D2P(view.x1min,y,M), zero=Math.abs(y)<1e-9;
+    ctx.strokeStyle=zero?'rgba(138,166,198,.5)':'rgba(138,166,198,.13)';
+    ctx.beginPath();ctx.moveTo(PAD.l,py);ctx.lineTo(PAD.l+M.W,py);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)'; ctx.fillText(fmtTick(y),PAD.l+3,py-3);
+  }
+  ctx.restore();
+  // axis titles
+  ctx.fillStyle='rgba(138,166,198,.8)';ctx.font='11px ui-monospace,monospace';
+  ctx.fillText('x₁',PAD.l+M.W-16,PAD.t+M.H+20); ctx.fillText('x₂',6,PAD.t+10);
+}
+const fmtTick=v=>{const a=Math.abs(v);return a>=1000||(a<0.01&&a>0)?v.toExponential(0):(Math.round(v*100)/100).toString();};
+
+function drawField(ctx,M){
+  const nx=clamp(Math.round(M.W/30),8,30), ny=clamp(Math.round(M.H/30),8,26);
+  const cell=Math.min(M.W/nx,M.H/ny), maxLen=cell*0.92;
+  const sxp=M.W/(view.x1max-view.x1min), syp=M.H/(view.x2max-view.x2min);   // px per data unit
+  const arr=[], mags=[];
+  for(let i=0;i<nx;i++) for(let j=0;j<ny;j++){
+    const px=PAD.l+(i+0.5)*(M.W/nx), py=PAD.t+(j+0.5)*(M.H/ny);
+    const[x1,x2]=P2D(px,py,M); let v;
+    try{ v=Ffn(x1,x2,0); }catch{ continue; }
+    if(!isFinite(v[0])||!isFinite(v[1])) continue;
+    const vx=v[0]*sxp, vy=-v[1]*syp, mag=Math.hypot(vx,vy);   // velocity in *screen* px/unit
+    arr.push({px,py,vx,vy,mag}); mags.push(mag);
+  }
+  if(!arr.length) return;
+  mags.sort((a,b)=>a-b);
+  const scale=mags[Math.floor(0.90*mags.length)]||mags[mags.length-1]||1e-9;   // 90th-percentile speed
+  for(const a of arr){
+    if(a.mag<1e-9){ ctx.fillStyle='rgba(138,166,198,.35)';
+      ctx.beginPath();ctx.arc(a.px,a.py,1.1,0,7);ctx.fill(); continue; }
+    const r=clamp(a.mag/scale,0,1);
+    const len=Math.min((a.mag/scale)*maxLen,maxLen*1.25);   // LENGTH ∝ SPEED (auto-scaled to the view)
+    const ux=a.vx/a.mag, uy=a.vy/a.mag;
+    const x0=a.px-ux*len*0.5, y0=a.py-uy*len*0.5, x1=a.px+ux*len*0.5, y1=a.py+uy*len*0.5;
+    ctx.strokeStyle=lerpHex('#5A82AD','#FFCB05',r); ctx.globalAlpha=0.45+0.55*r; ctx.lineWidth=1.2;
+    ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
+    const hl=Math.min(5,len*0.42), ang=Math.atan2(uy,ux);   // arrowhead
+    ctx.beginPath();ctx.moveTo(x1,y1);
+    ctx.lineTo(x1-hl*Math.cos(ang-0.42),y1-hl*Math.sin(ang-0.42));
+    ctx.moveTo(x1,y1);
+    ctx.lineTo(x1-hl*Math.cos(ang+0.42),y1-hl*Math.sin(ang+0.42));
+    ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+}
+function drawTrace(ctx,M,pts,color,upto,alpha,width){
+  if(pts.length<2) return;
+  ctx.save();ctx.beginPath();ctx.rect(PAD.l,PAD.t,M.W,M.H);ctx.clip();
+  ctx.strokeStyle=color;ctx.globalAlpha=alpha;ctx.lineWidth=width;ctx.lineJoin='round';
+  ctx.beginPath();
+  const n=Math.min(upto,pts.length);
+  for(let i=0;i<n;i++){ const[px,py]=D2P(pts[i].x1,pts[i].x2,M); i?ctx.lineTo(px,py):ctx.moveTo(px,py); }
+  ctx.stroke();ctx.restore();
+}
+function drawDot(ctx,M,cur){
+  const i=clamp(Math.floor(cur.idx),0,cur.pts.length-1), p=cur.pts[i];
+  const[px,py]=D2P(p.x1,p.x2,M);
+  ctx.save();ctx.shadowColor=cur.color;ctx.shadowBlur=12;
+  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(px,py,4.5,0,7);ctx.fill();
+  ctx.shadowBlur=0;ctx.lineWidth=2;ctx.strokeStyle=cur.color;ctx.beginPath();ctx.arc(px,py,4.5,0,7);ctx.stroke();
+  ctx.restore();
+}
+function drawIC(ctx,M){
+  const[px,py]=D2P(pendingIC.x1,pendingIC.x2,M);
+  ctx.save();ctx.strokeStyle='#fff';ctx.lineWidth=1.6;
+  ctx.beginPath();ctx.arc(px,py,6,0,7);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(px-9,py);ctx.lineTo(px+9,py);ctx.moveTo(px,py-9);ctx.lineTo(px,py+9);ctx.stroke();
+  ctx.restore();
+}
+
+/* ================================================================
+   6. RENDER — TIME RESPONSE (x1 & x2 vs t)
+   ================================================================ */
+function renderTime(){
+  const {ctx,w,h}=fitDPR(time);
+  const pL=46,pR=14,pT=12,pB=26, W=w-pL-pR, H=h-pT-pB;
+  ctx.clearRect(0,0,w,h);
+  // y-range from every visible run (kept stable across a run by using full current traj)
+  let lo=Infinity,hi=-Infinity;
+  const scan=pts=>{for(const p of pts){ if(isFinite(p.x1)){lo=Math.min(lo,p.x1);hi=Math.max(hi,p.x1);}
+                                        if(isFinite(p.x2)){lo=Math.min(lo,p.x2);hi=Math.max(hi,p.x2);} }};
+  for(const tr of traces) scan(tr.pts); if(current) scan(current.pts);
+  if(!isFinite(lo)){lo=-1;hi=1;} const m=(hi-lo)*0.12||1; lo-=m;hi+=m;
+  const X=tt=>pL+(tt/Math.max(T,1e-6))*W, Y=v=>pT+(1-(v-lo)/(hi-lo))*H;
+  // grid
+  ctx.font='10px ui-monospace,monospace';ctx.lineWidth=1;
+  const sy=niceStep(hi-lo,5);
+  for(let y=Math.ceil(lo/sy)*sy;y<=hi;y+=sy){ const yy=Y(y);
+    ctx.strokeStyle=Math.abs(y)<1e-9?'rgba(138,166,198,.4)':'rgba(138,166,198,.13)';
+    ctx.beginPath();ctx.moveTo(pL,yy);ctx.lineTo(pL+W,yy);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)';ctx.fillText(fmtTick(y),4,yy+3); }
+  const sx=niceStep(T,6);
+  for(let x=0;x<=T+1e-9;x+=sx){ const xx=X(x);
+    ctx.strokeStyle='rgba(138,166,198,.13)';ctx.beginPath();ctx.moveTo(xx,pT);ctx.lineTo(xx,pT+H);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)';ctx.fillText(fmtTick(x),xx+2,pT+H+16); }
+  ctx.fillStyle='rgba(138,166,198,.8)';ctx.fillText('t (s)',pL+W-30,pT+H+16);
+  // committed runs, faint
+  for(const tr of traces){ line(ctx,tr.pts,'x1',X,Y,'#57C7FF',tr.pts.length,.16,1.2);
+                           line(ctx,tr.pts,'x2',X,Y,'#FFCB05',tr.pts.length,.16,1.2); }
+  // current run, up to the animation head
+  if(current){ const n=Math.floor(current.idx)+1;
+    line(ctx,current.pts,'x1',X,Y,'#57C7FF',n,1,2);
+    line(ctx,current.pts,'x2',X,Y,'#FFCB05',n,1,2); }
+}
+function line(ctx,pts,key,X,Y,color,upto,alpha,width){
+  if(pts.length<2) return;
+  ctx.strokeStyle=color;ctx.globalAlpha=alpha;ctx.lineWidth=width;ctx.beginPath();
+  const n=Math.min(upto,pts.length);
+  for(let i=0;i<n;i++){ const x=X(pts[i].t),y=Y(pts[i][key]); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }
+  ctx.stroke();ctx.globalAlpha=1;
+}
+
+/* ================================================================
+   7. SIMULATE  —  integrate, then animate the dot + time trace
+   ================================================================ */
+function playbackDuration(){ return clamp(T,2.5,9); }   // wall-clock seconds for the animation
+let lastWall=0;
+function simulate(){
+  if(animating) return;
+  if(!Ffn){ setErr('⚠ render a valid field first'); return; }
+  if(!pendingIC){ flash('Click on the phase plot to place an initial condition first.'); return; }
+  const pts=integrate(pendingIC);
+  if(pts.length<2){ flash('Trajectory is degenerate — try another point.'); return; }
+  current={pts,color:nextColor(),idx:0};
+  animating=true; el('sim').disabled=true; el('clear').disabled=true;
+  setStatus(''); lastWall=performance.now();
+  requestAnimationFrame(step);
+}
+function step(now){
+  const dur=playbackDuration(), dt=(now-lastWall)/1000; lastWall=now;
+  current.idx += (dt/dur)*(current.pts.length-1);
+  if(current.idx>=current.pts.length-1){
+    current.idx=current.pts.length-1;
+    renderPhase(); renderTime(); updateReadouts();
+    traces.push({pts:current.pts,color:current.color});   // commit the finished trace
+    const last=current.pts[current.pts.length-1]; current=null;
+    animating=false; el('sim').disabled=false; el('clear').disabled=false;
+    setStatus('Trace kept. Click a new point and Simulate again, or Clear to reset.');
+    updateReadouts(last);
+    return;
+  }
+  renderPhase(); renderTime(); updateReadouts();
+  requestAnimationFrame(step);
+}
+function updateReadouts(override){
+  el('roIC').textContent = pendingIC ? `(${fmt(pendingIC.x1)}, ${fmt(pendingIC.x2)})` : '—';
+  let cur=override;
+  if(!cur && current){ const p=current.pts[clamp(Math.floor(current.idx),0,current.pts.length-1)]; cur=p; }
+  if(cur){ el('roCur').textContent=`(${fmt(cur.x1)}, ${fmt(cur.x2)})`; el('roT').textContent=(cur.t??0).toFixed(2); }
+}
+function setStatus(m,warn){ const s=el('pstatus'); s.textContent=m; s.className='status'+(warn?' warn':''); }
+function flash(m){ setStatus(m,true); }
+
+/* ================================================================
+   8. MOUSE — click = set IC, drag = pan, wheel = zoom
+   ================================================================ */
+let down=null;   // {x,y,moved}
+phase.addEventListener('mousedown',e=>{
+  if(animating) return;
+  const r=phase.getBoundingClientRect(); down={x:e.clientX-r.left,y:e.clientY-r.top,lx:e.clientX-r.left,ly:e.clientY-r.top,moved:false};
+});
+window.addEventListener('mousemove',e=>{
+  if(!down) return;
+  const r=phase.getBoundingClientRect(), x=e.clientX-r.left, y=e.clientY-r.top, M=metrics();
+  if(Math.hypot(x-down.x,y-down.y)>4) down.moved=true;
+  if(down.moved){                                   // grab-pan: keep the grabbed data point under the cursor
+    const dx=x-down.lx, dy=y-down.ly;
+    const rx=view.x1max-view.x1min, ry=view.x2max-view.x2min;
+    view.x1min-=dx/M.W*rx; view.x1max-=dx/M.W*rx;
+    view.x2min+=dy/M.H*ry; view.x2max+=dy/M.H*ry;
+    down.lx=x; down.ly=y; syncFields(); renderPhase();
+  }
+});
+window.addEventListener('mouseup',e=>{
+  if(!down) return;
+  if(!down.moved && !animating){                    // a click (no drag) → place the initial condition
+    const M=metrics(), [x1,x2]=P2D(down.x,down.y,M);
+    pendingIC={x1,x2}; setStatus('Initial condition set — press Simulate ▶'); updateReadouts(); renderPhase();
+  }
+  down=null;
+});
+phase.addEventListener('wheel',e=>{
+  if(animating) return;
+  e.preventDefault();
+  const r=phase.getBoundingClientRect(), M=metrics(), [dx,dy]=P2D(e.clientX-r.left,e.clientY-r.top,M);
+  const f=e.deltaY>0?1.1:1/1.1;
+  view.x1min=dx-(dx-view.x1min)*f; view.x1max=dx+(view.x1max-dx)*f;
+  view.x2min=dy-(dy-view.x2min)*f; view.x2max=dy+(view.x2max-dy)*f;
+  clampView(); syncFields(); renderPhase();
+},{passive:false});
+function clampView(){
+  if(view.x1max-view.x1min<1e-3){const c=(view.x1min+view.x1max)/2;view.x1min=c-5e-4;view.x1max=c+5e-4;}
+  if(view.x2max-view.x2min<1e-3){const c=(view.x2min+view.x2max)/2;view.x2min=c-5e-4;view.x2max=c+5e-4;}
+}
+
+/* ================================================================
+   9. FIELD INPUTS + BUTTONS
+   ================================================================ */
+function syncFields(){
+  el('x1min').value=+view.x1min.toFixed(4); el('x1max').value=+view.x1max.toFixed(4);
+  el('x2min').value=+view.x2min.toFixed(4); el('x2max').value=+view.x2max.toFixed(4);
+}
+function readFields(){
+  const a=parseFloat(el('x1min').value),b=parseFloat(el('x1max').value),
+        c=parseFloat(el('x2min').value),d=parseFloat(el('x2max').value);
+  if(isFinite(a)&&isFinite(b)&&b>a){view.x1min=a;view.x1max=b;}
+  if(isFinite(c)&&isFinite(d)&&d>c){view.x2min=c;view.x2max=d;}
+  const T2=parseFloat(el('dur').value); if(isFinite(T2)&&T2>0) T=clamp(T2,0.5,1000);
+  renderPhase(); renderTime();
+}
+['x1min','x1max','x2min','x2max','dur'].forEach(id=>el(id).addEventListener('change',readFields));
+
+el('render').onclick=()=>{ if(compile()) renderPhase(); };
+[el('f1'),el('f2')].forEach(inp=>inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ if(compile()) renderPhase(); }}));
+el('sim').onclick=simulate;
+el('clear').onclick=()=>{ traces.length=0; current=null; colorIx=0; setStatus('Traces cleared.'); renderPhase(); renderTime(); };
+
+/* ================================================================
+   10. BOOT
+   ================================================================ */
+window.addEventListener('resize',()=>{ renderPhase(); renderTime(); });
+compile(); syncFields();
+setStatus('Initial condition set — press Simulate ▶'); updateReadouts();
+renderPhase(); renderTime();
+</script>
+</body>
+</html>
