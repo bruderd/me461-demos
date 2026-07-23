@@ -73,25 +73,14 @@
   .axisrow .al{font-family:var(--mono);font-size:11px;color:var(--muted)}
   .axisrow input{width:58px;padding:5px 6px;font-size:12px}
 
-  /* ---- two columns ---- */
+  /* ---- the two planes, side by side (grid keeps them equal height) ---- */
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media(max-width:820px){.grid{grid-template-columns:1fr}}
-  .col{display:flex;flex-direction:column;gap:16px}
   .legend{display:flex;gap:12px;margin-left:auto}
   .legend span{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;color:var(--muted)}
   .legend i{width:14px;height:3px;border-radius:2px;display:inline-block}
   .status{font-size:12px;color:var(--muted);min-height:15px}
   .status.warn{color:var(--maize)}
-
-  /* ---- mode-analysis panel ---- */
-  .anlz{display:flex;flex-direction:column;gap:7px}
-  .anlz .row{display:flex;justify-content:space-between;gap:12px;align-items:baseline;
-             border-bottom:1px dashed rgba(138,166,198,.14);padding-bottom:6px}
-  .anlz .row:last-child{border-bottom:0;padding-bottom:0}
-  .anlz .lab{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
-  .anlz .val{font-family:var(--mono);font-size:12px;color:var(--ink);text-align:right}
-  .anlz .val.big{font-family:var(--sans);font-weight:600;font-size:13px}
-  .anlz .val.big.stable{color:var(--good)} .anlz .val.big.unstable{color:var(--bad)} .anlz .val.big.marginal{color:var(--maize)}
 
   footer{color:var(--muted);font-size:12px;margin-top:16px;line-height:1.6}
   footer b{color:var(--ink);font-weight:600}
@@ -127,53 +116,41 @@
     </div>
   </div>
 
-  <!-- ============ TWO COLUMNS ============ -->
+  <!-- ============ THE TWO PLANES (equal-height, side by side) ============ -->
   <div class="grid">
 
     <!-- LEFT: the s-plane -->
-    <div class="col">
-      <div class="card">
-        <h2>s-plane · pole location <span class="note">drag the marker · scroll = zoom · drag background = pan</span></h2>
-        <div class="axisrow">
-          <span class="grp"><span class="al">Re s</span><input id="lRe0" type="number" step="any"><input id="lRe1" type="number" step="any"></span>
-          <span class="grp"><span class="al">Im s</span><input id="lIm0" type="number" step="any"><input id="lIm1" type="number" step="any"></span>
-        </div>
-        <canvas id="splane" class="plane"></canvas>
-        <div class="status" id="statS">Drag the marker anywhere — the right panel updates live.</div>
+    <div class="card">
+      <h2>s-plane · pole location <span class="note">drag the marker · scroll = zoom · drag background = pan</span></h2>
+      <div class="axisrow">
+        <span class="grp"><span class="al">Re s</span><input id="lRe0" type="number" step="any"><input id="lRe1" type="number" step="any"></span>
+        <span class="grp"><span class="al">Im s</span><input id="lIm0" type="number" step="any"><input id="lIm1" type="number" step="any"></span>
       </div>
-      <div class="card">
-        <h2>Mode analysis <span class="note">what this pole means</span></h2>
-        <div class="anlz">
-          <div class="row"><span class="lab">e<sup>st</sup></span><span class="val">e<sup>σt</sup>·(cos ωt + j&thinsp;sin ωt)</span></div>
-          <div class="row"><span class="lab">|e<sup>st</sup>| = e<sup>σt</sup></span><span class="val" id="anMag">—</span></div>
-          <div class="row"><span class="lab">rotation</span><span class="val" id="anRot">—</span></div>
-          <div class="row"><span class="lab">per revolution</span><span class="val" id="anRev">—</span></div>
-          <div class="row"><span class="lab">verdict</span><span class="val big" id="anVerdict">—</span></div>
-        </div>
-      </div>
+      <canvas id="splane" class="plane"></canvas>
+      <div class="status" id="statS">Drag the marker anywhere — the right panel updates live.</div>
     </div>
 
     <!-- RIGHT: the trajectory e^{st} -->
-    <div class="col">
-      <div class="card">
-        <h2><span class="m">e<sup>st</sup></span> · trajectory in the complex plane
-            <span class="note">starts at 1 when t = 0 · scroll = zoom · drag = pan</span></h2>
-        <div class="axisrow">
-          <span class="grp"><span class="al">Re</span><input id="rRe0" type="number" step="any"><input id="rRe1" type="number" step="any"></span>
-          <span class="grp"><span class="al">Im</span><input id="rIm0" type="number" step="any"><input id="rIm1" type="number" step="any"></span>
-        </div>
-        <canvas id="est" class="plane"></canvas>
-        <div class="status" id="statE"></div>
+    <div class="card">
+      <h2><span class="m">e<sup>st</sup></span> · trajectory in the complex plane
+          <span class="note">starts at 1 when t = 0 · scroll = zoom · drag = pan</span></h2>
+      <div class="axisrow">
+        <span class="grp"><span class="al">Re</span><input id="rRe0" type="number" step="any"><input id="rRe1" type="number" step="any"></span>
+        <span class="grp"><span class="al">Im</span><input id="rIm0" type="number" step="any"><input id="rIm1" type="number" step="any"></span>
       </div>
-      <div class="card">
-        <h2>Re &amp; Im of <span class="m">e<sup>st</sup></span> vs t
-          <span class="legend">
-            <span><i style="background:var(--x1)"></i>Re</span>
-            <span><i style="background:var(--x2)"></i>Im</span>
-          </span></h2>
-        <canvas id="tstrip" class="tcanvas"></canvas>
-      </div>
+      <canvas id="est" class="plane"></canvas>
+      <div class="status" id="statE"></div>
     </div>
+  </div>
+
+  <!-- ============ Re & Im vs t (full width) ============ -->
+  <div class="card">
+    <h2><span id="tTitle">Re &amp; Im of <span class="m">e<sup>st</sup></span> vs t</span>
+      <span class="legend">
+        <span><i style="background:var(--x1)"></i>Re</span>
+        <span><i style="background:var(--x2)"></i>Im</span>
+      </span></h2>
+    <canvas id="tstrip" class="tcanvas"></canvas>
   </div>
 
   <footer>
@@ -450,20 +427,27 @@ function renderTime(){
   const cv=el('tstrip'); const {ctx,w,h}=fitDPR(cv);
   const pL=46,pR=14,pT=12,pB=24, W=w-pL-pR, H=h-pT-pB;
   ctx.clearRect(0,0,w,h);
-  let pts = traj?traj.pts:[{t:0,re:1,im:0}];
-  if(pts.length<2) pts=[{t:0,re:1,im:0},{t:1,re:1,im:0}];
+  // in conjugate mode plot the SUM e^{st} + e^{s̄t}: the imaginary parts cancel (Im ≡ 0)
+  // and what's left is the real signal 2·e^{σt}cos ωt a physical system produces.
+  let pts;
+  if(conj && traj && !traj.constant)
+    pts = traj.pts.map((p,i)=>({t:p.t, re:p.re+traj.mirror[i].re, im:p.im+traj.mirror[i].im}));
+  else
+    pts = traj?traj.pts:[{t:0,re:1,im:0}];
+  if(pts.length<2){ const p0=pts[0]||{re:1,im:0}; pts=[{t:0,re:p0.re,im:p0.im},{t:1,re:p0.re,im:p0.im}]; }
   const Tend=Math.max(pts[pts.length-1].t,1e-3);
   // y-range: 2nd/98th percentile, but cap to a few × the early spread if the tail diverges
   const vals=[],early=[]; const k=Math.max(3,Math.ceil(0.12*pts.length));
   for(let i=0;i<pts.length;i++){ const p=pts[i];
     if(isFinite(p.re)){vals.push(p.re); if(i<k) early.push(p.re);}
     if(isFinite(p.im)){vals.push(p.im); if(i<k) early.push(p.im);} }
-  vals.sort((a,b)=>a-b);
-  const q=f=>vals[clamp(Math.floor(f*(vals.length-1)),0,vals.length-1)];
-  let lo=Math.min(0,q(0.02)), hi=Math.max(0,q(0.98));
+  // show the true amplitude, but cap at 3× the early-window peak so a growing mode's
+  // late blow-up clips off-screen instead of crushing the early behaviour flat.
+  let lo=Infinity, hi=-Infinity; for(const v of vals){ if(v<lo)lo=v; if(v>hi)hi=v; }
   let em=0; for(const v of early) em=Math.max(em,Math.abs(v));
-  if(em>0){ const cap=2.6*em; hi=Math.min(hi,cap); lo=Math.max(lo,-cap); }
-  if(hi-lo<1e-9){ lo-=1; hi+=1; }
+  if(em>0){ hi=Math.min(hi,3*em); lo=Math.max(lo,-3*em); }
+  if(!isFinite(lo)||!isFinite(hi)||hi-lo<1e-9){ lo=-1; hi=1; }
+  lo=Math.min(lo,0); hi=Math.max(hi,0);                        // keep the zero axis in view
   const m=(hi-lo)*0.1; lo-=m; hi+=m;
   const X=tt=>pL+(tt/Tend)*W, Y=v=>pT+(1-(v-lo)/(hi-lo))*H;
   ctx.font='10px ui-monospace,monospace';
@@ -500,17 +484,6 @@ function updateReadouts(){
   el('roZ').textContent = wn>1e-9?fmt(-sigma/wn):'—';
   el('roMode').textContent=c.short;
   el('roMode').style.color = c.stab==='stable'?'var(--good)':c.stab==='unstable'?'var(--bad)':'var(--maize)';
-  // analysis panel
-  const aw=Math.abs(omega), asig=Math.abs(sigma);
-  el('anMag').textContent = asig<1e-9 ? 'σ = 0 → magnitude ≡ 1 (no growth/decay)'
-    : `σ = ${fmt(sigma)} → τ = 1/|σ| = ${fmt(1/asig)} s (${sigma<0?'decay':'growth'})`;
-  el('anRot').textContent = aw<1e-9 ? 'ω = 0 → no rotation (real axis)'
-    : `ω = ${fmt(omega)} rad/s → period ${fmt(2*Math.PI/aw)} s, ${omega>0?'CCW ↺':'CW ↻'}`;
-  if(aw<1e-9 || asig<1e-9 && aw<1e-9){ el('anRev').textContent='—'; }
-  else if(aw<1e-9){ el('anRev').textContent='—'; }
-  else { const f=Math.exp(2*Math.PI*sigma/aw);
-    el('anRev').textContent = `amplitude × ${f.toPrecision(3)} each loop (${f<1?'shrinks':f>1?'grows':'holds'})`; }
-  const v=el('anVerdict'); v.textContent=c.text; v.className='val big '+c.stab;
 }
 
 /* ================================================================
@@ -610,8 +583,13 @@ axisHandler(['lRe0','lRe1','lIm0','lIm1'],viewL,()=>renderSPlane());
 axisHandler(['rRe0','rRe1','rIm0','rIm1'],viewR,()=>refreshRight());
 
 // --- conjugate toggle, fit, reset ---
-function setConj(on){ conj=on; el('cjOn').classList.toggle('on',on); el('cjOff').classList.toggle('on',!on);
-  renderSPlane(); renderEstStatic(); }
+function setConj(on){
+  conj=on; el('cjOn').classList.toggle('on',on); el('cjOff').classList.toggle('on',!on);
+  el('tTitle').innerHTML = on
+    ? 'Re &amp; Im of <span class="m">e<sup>st</sup> + e<sup>s&#772;t</sup></span> vs t'
+    : 'Re &amp; Im of <span class="m">e<sup>st</sup></span> vs t';
+  renderSPlane(); renderEstStatic(); renderTime();
+}
 el('cjOn').onclick=()=>setConj(true); el('cjOff').onclick=()=>setConj(false);
 el('fit').onclick=()=>{
   const aw=Math.abs(omega), asig=Math.abs(sigma); let R;
