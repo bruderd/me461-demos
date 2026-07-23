@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MECHENG 461 · Sum of Complex Exponentials</title>
+<style>
+  /* ---- Instrument-cluster aesthetic: navy panel, maize accent, mono telemetry ---- */
+  :root{
+    --navy:#00274C; --navy-2:#0A1B33; --panel:#102A4C;
+    --maize:#FFCB05; --cyan:#57C7FF; --ink:#EAF1FB; --muted:#8AA6C6;
+    --grid:rgba(138,166,198,.16); --good:#5BD6A0; --bad:#FF6B6B;
+    --re:#57C7FF;          /* Re f(t) colour on the time plot */
+    --im:#FFCB05;          /* Im f(t) colour on the time plot */
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--navy-2)}
+  body{background:linear-gradient(180deg,#0B1A30,#08111F 60%);color:var(--ink);font-family:var(--sans);
+       -webkit-font-smoothing:antialiased;padding:22px;min-height:100vh}
+  .wrap{max-width:1180px;margin:0 auto}
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:4px}
+  header .tag{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--maize);
+              border:1px solid rgba(255,203,5,.35);padding:3px 8px;border-radius:4px}
+  h1{font-size:20px;font-weight:650;margin:0;letter-spacing:.01em}
+  header .sub{color:var(--muted);font-size:13px}
+  .card{background:linear-gradient(180deg,var(--panel),#0C2140);border:1px solid rgba(138,166,198,.16);
+        border-radius:12px;padding:14px;margin-top:16px}
+  .card h2{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+           color:var(--muted);margin:0 0 10px;font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .card h2 .note{font-family:var(--sans);letter-spacing:0;text-transform:none;font-size:11px;color:var(--muted);font-weight:400}
+  canvas{display:block;width:100%;border-radius:8px}
+  .plane{height:392px}
+  @media(max-width:820px){.plane{height:340px}}
+  #phasor{background:radial-gradient(120% 120% at 50% 50%,#0d2740,#0a1526);cursor:grab;touch-action:none}
+  #phasor:active{cursor:grabbing}
+  #tplot{background:linear-gradient(180deg,#0d2a52,#0a1830);cursor:col-resize;touch-action:none}
+
+  input[type=text],input[type=number]{background:#08182f;color:#cfe3ff;border:1px solid rgba(138,166,198,.2);
+    border-radius:8px;padding:8px 9px;font-family:var(--mono);font-size:14px;width:100%}
+  input[type=text]:focus,input[type=number]:focus{outline:none;border-color:rgba(255,203,5,.6)}
+  input.bad{border-color:var(--bad);background:#2a1113}
+  code{font-family:var(--mono);background:#0a1d38;padding:1px 5px;border-radius:4px;font-size:12px}
+
+  /* ---- expression builder: f(t) = c1 e^(s1 t) + c2 e^(s2 t) + ... ---- */
+  #terms{display:flex;flex-direction:column;gap:8px}
+  .term{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .term .conn{font-family:var(--mono);font-size:14px;color:var(--ink);width:52px;text-align:right;flex:none}
+  .term .chip{width:11px;height:11px;border-radius:50%;flex:none;box-shadow:0 0 6px currentColor}
+  .term .cin{width:104px;flex:none}
+  .term .op{font-family:var(--mono);font-size:15px;color:var(--muted)}
+  .term .sup{font-family:var(--mono);font-size:12px;color:var(--muted);position:relative;top:-.35em}
+  .term .rm{padding:6px 10px;font-size:12px;line-height:1;color:var(--muted);background:#0a1d38}
+  .term .rm:hover{background:#3a1414;color:#ffd0d0}
+  .termctrl{display:flex;align-items:center;gap:14px;margin-top:12px}
+
+  /* ---- shared run controls ---- */
+  .ctrls{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;justify-content:space-between}
+  .fields{display:flex;gap:12px;flex-wrap:wrap}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  .field input{width:112px}
+  .readouts{display:flex;gap:8px;flex-wrap:wrap}
+  .ro{background:#0A1D38;border:1px solid rgba(138,166,198,.14);border-radius:8px;padding:6px 10px}
+  .ro .k{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  .ro .v{font-family:var(--mono);font-size:15px;font-weight:600;margin-top:1px}
+
+  .btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  button{font-family:var(--sans);font-size:13px;font-weight:600;border:1px solid rgba(138,166,198,.25);
+    background:#122f52;color:var(--ink);padding:9px 15px;border-radius:8px;cursor:pointer;transition:.12s}
+  button:hover{background:#173a66}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.primary{background:var(--maize);color:#08213f;border-color:transparent}
+  button.primary:hover{background:#ffd94d}
+  button.primary.dirty{box-shadow:0 0 0 3px rgba(255,203,5,.25);animation:pulse 1.4s ease-in-out infinite}
+  @keyframes pulse{50%{box-shadow:0 0 0 6px rgba(255,203,5,.08)}}
+  button.mini{padding:5px 10px;font-size:12px}
+  .spd{display:flex;align-items:center;gap:7px}
+  .spd input[type=range]{width:110px;accent-color:var(--maize)}
+  .al{font-family:var(--mono);font-size:11px;color:var(--muted)}
+
+  /* ---- compact per-panel axis controls ---- */
+  .axisrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 9px;min-height:32px}
+  .axisrow .grp{display:flex;align-items:center;gap:4px}
+  .axisrow input{width:58px;padding:5px 6px;font-size:12px}
+
+  /* ---- the two panels, side by side (grid keeps them equal height) ---- */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  .legend{display:flex;gap:12px;margin-left:auto}
+  .legend span{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .legend i{width:14px;height:3px;border-radius:2px;display:inline-block}
+  .status{font-size:12px;color:var(--muted);min-height:15px}
+  .status.warn{color:var(--maize)}
+  .status.err{color:var(--bad)}
+
+  footer{color:var(--muted);font-size:12px;margin-top:16px;line-height:1.6}
+  footer b{color:var(--ink);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="tag">MECHENG&nbsp;461</span>
+    <h1>Sum of Complex Exponentials</h1>
+    <span class="sub">add up phasors c<sub>k</sub>&thinsp;e<sup>s<sub>k</sub>t</sup> in the complex plane and watch the signal f(t) they build</span>
+  </header>
+
+  <!-- ============ EXPRESSION BUILDER ============ -->
+  <div class="card">
+    <h2>Define f(t) <span class="note">type complex numbers into the boxes — e.g. <code>0.5</code>, <code>-2j</code>, <code>1+3j</code> · up to 8 terms</span></h2>
+    <div id="terms"></div>
+    <div class="termctrl">
+      <button id="addTerm">+ Add term</button>
+      <span class="status" id="exprStatus"></span>
+    </div>
+  </div>
+
+  <!-- ============ RUN CONTROLS ============ -->
+  <div class="card ctrls">
+    <div class="fields">
+      <div class="field"><span class="k">Duration (s)</span><input id="dur" type="number" step="any" value="6.28"></div>
+    </div>
+    <div class="readouts">
+      <div class="ro"><div class="k">t</div><div class="v" id="roT">—</div></div>
+      <div class="ro"><div class="k">f(t)</div><div class="v" id="roF">—</div></div>
+    </div>
+    <div class="btns">
+      <button id="run" class="primary">▶&nbsp;Run</button>
+      <button id="play">❚❚&nbsp;Pause</button>
+      <button id="restart" title="restart from t = 0">⟲</button>
+      <span class="spd"><span class="al">speed</span><input id="spd" type="range" min="0.1" max="4" step="0.1" value="1"><span id="spdV" class="al">1.0×</span></span>
+    </div>
+  </div>
+
+  <!-- ============ THE TWO PANELS (equal-height, side by side) ============ -->
+  <div class="grid">
+
+    <!-- LEFT: the phasor sum in the complex plane -->
+    <div class="card">
+      <h2>Complex plane <span class="note">each vector is one term c<sub>k</sub>e<sup>s<sub>k</sub>t</sup>, chained tip-to-tail · the final tip is f(t) · scroll = zoom · drag = pan</span></h2>
+      <div class="axisrow">
+        <span class="grp"><span class="al">Re</span><input id="pRe0" type="number" step="any"><input id="pRe1" type="number" step="any"></span>
+        <span class="grp"><span class="al">Im</span><input id="pIm0" type="number" step="any"><input id="pIm1" type="number" step="any"></span>
+        <button id="fit" class="mini">Fit&nbsp;⤢</button>
+      </div>
+      <canvas id="phasor" class="plane"></canvas>
+      <div class="status" id="statP">Vectors add tip-to-tail; the glowing dot traces f(t).</div>
+    </div>
+
+    <!-- RIGHT: Re & Im of f(t) vs t -->
+    <div class="card">
+      <h2>Re &amp; Im of f(t) vs t
+        <span class="legend">
+          <span><i style="background:var(--re)"></i>Re</span>
+          <span><i style="background:var(--im)"></i>Im</span>
+        </span></h2>
+      <div class="axisrow"><span class="al">click or drag on the plot to scrub time</span></div>
+      <canvas id="tplot" class="plane"></canvas>
+      <div class="status" id="statT"></div>
+    </div>
+  </div>
+
+  <footer>
+    <b>How it works.</b>&nbsp; f(t) = Σ<sub>k</sub> c<sub>k</sub>e<sup>s<sub>k</sub>t</sup> is a sum of <em>phasors</em>. Each term c<sub>k</sub>e<sup>s<sub>k</sub>t</sup>
+    is a complex number that rotates at rate ω<sub>k</sub> = Im&thinsp;s<sub>k</sub> while its length e<sup>σ<sub>k</sub>t</sup> grows (σ<sub>k</sub>&gt;0)
+    or decays (σ<sub>k</sub>&lt;0), with σ<sub>k</sub> = Re&thinsp;s<sub>k</sub>. Drawn tip-to-tail from the origin, the vectors chain into a running
+    partial sum, and the <b>tip of the last vector is f(t)</b> — the number the right-hand plot splits into its real and imaginary parts.
+    A single complex term is never real on its own; the default pairs <code>0.5&thinsp;e<sup>2jt</sup></code> with its conjugate
+    <code>0.5&thinsp;e<sup>-2jt</sup></code> — two vectors counter-rotating so their imaginary parts always cancel and the tip slides along the
+    real axis as <em>cos&thinsp;2t</em>. That is how real signals are built from complex exponentials. Everything runs client-side; nothing touches a server.
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ================================================================
+   0. STATE
+   ================================================================ */
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const el=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+
+// up to 8 distinct term colours; index maps a row's chip to its vector
+const TERM_COLORS=['#57C7FF','#FFCB05','#5BD6A0','#FF6B6B','#C792EA','#FF9F5B','#7FE0D0','#F58FB0'];
+
+// default = two conjugate terms whose sum is the real signal cos(2t)
+let terms=[{coef:'0.5',exp:'2j'},{coef:'0.5',exp:'-2j'}];
+
+const viewP0={x1min:-1.4,x1max:1.4,x2min:-1.4,x2max:1.4};   // fallback complex-plane window
+const viewP={...viewP0};                                    // Re f (x1) × Im f (x2)
+
+let sim=null;                                               // {c:[],s:[],T,N,f:[{t,re,im}],bbox}
+let tc=0, playing=true, speed=1, dirty=false;               // animation cursor / transport
+
+/* ================================================================
+   1. COMPLEX ARITHMETIC + PARSING
+   ================================================================ */
+const Cmul=(a,b)=>({re:a.re*b.re-a.im*b.im, im:a.re*b.im+a.im*b.re});
+// e^{s t} for complex s = σ + jω, real t : magnitude e^{σt}, angle ωt
+function Cexp_st(s,t){ const r=Math.exp(s.re*t), a=s.im*t; return {re:r*Math.cos(a), im:r*Math.sin(a)}; }
+function termVal(c,s,t){ return Cmul(c,Cexp_st(s,t)); }     // one phasor at time t
+
+// Parse strings like "3", "-2.5", "2j", "-j", "1+2j", "3 - 4i" into {re,im}. null on failure.
+function parseComplex(str){
+  let s=(str||'').trim().replace(/\s+/g,'').replace(/[iIjJ]/g,'j');
+  if(s==='') return null;
+  const tokens=s.match(/[+-]?[^+-]+/g);                     // signed chunks: "1","+2j","-j"
+  if(!tokens) return null;
+  let re=0, im=0;
+  for(const tok of tokens){
+    if(tok.endsWith('j')){
+      const num=tok.slice(0,-1);
+      if(num===''||num==='+') im+=1;
+      else if(num==='-') im+=-1;
+      else { const v=parseFloat(num); if(!isFinite(v)||!/^[+-]?(\d+\.?\d*|\.\d+)$/.test(num)) return null; im+=v; }
+    } else {
+      if(!/^[+-]?(\d+\.?\d*|\.\d+)$/.test(tok)) return null;
+      const v=parseFloat(tok); if(!isFinite(v)) return null; re+=v;
+    }
+  }
+  return {re,im};
+}
+
+/* ================================================================
+   2. CANVAS PLUMBING — equal-aspect fit for the complex plane
+      (circles stay circular; a phasor's rotation reads true)
+   ================================================================ */
+const PAD={l:44,t:14,r:16,b:28};
+function fitDPR(cv){
+  const dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight;
+  cv.width=w*dpr; cv.height=h*dpr;
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx,w,h,dpr};
+}
+function metricsOf(cv){ const w=cv.clientWidth,h=cv.clientHeight; return {w,h,W:w-PAD.l-PAD.r,H:h-PAD.t-PAD.b}; }
+// derive the actually-displayed window from a requested box, equal px/unit in x & y
+function actual(cv,v){
+  const M=metricsOf(cv);
+  const boxW=Math.max(v.x1max-v.x1min,1e-9), boxH=Math.max(v.x2max-v.x2min,1e-9);
+  const cx=(v.x1min+v.x1max)/2, cy=(v.x2min+v.x2max)/2;
+  const s=Math.min(M.W/boxW, M.H/boxH);
+  const hw=M.W/s/2, hh=M.H/s/2;
+  return {M,s,x1min:cx-hw,x1max:cx+hw,x2min:cy-hh,x2max:cy+hh};
+}
+function D2P(x,y,A){ return [ PAD.l+(x-A.x1min)/(A.x1max-A.x1min)*A.M.W,
+                             PAD.t+(1-(y-A.x2min)/(A.x2max-A.x2min))*A.M.H ]; }
+function P2D(px,py,A){ return [ A.x1min+(px-PAD.l)/A.M.W*(A.x1max-A.x1min),
+                               A.x2min+(1-(py-PAD.t)/A.M.H)*(A.x2max-A.x2min) ]; }
+function niceStep(span,target){
+  const raw=span/target, mag=Math.pow(10,Math.floor(Math.log10(raw))), n=raw/mag;
+  return (n<1.5?1:n<3?2:n<7?5:10)*mag;
+}
+const fmt=v=>!isFinite(v)?'∞':Math.abs(v)>=100||v===0?v.toFixed(0):Math.abs(v)>=10?v.toFixed(1):v.toFixed(2);
+const fmtTick=v=>{const a=Math.abs(v);return a>=1000||(a<0.01&&a>0)?v.toExponential(0):(Math.round(v*100)/100).toString();};
+function fmtC(re,im){ const r=fmt(re); if(Math.abs(im)<5e-4) return r;
+  return `${r} ${im<0?'−':'+'} ${fmt(Math.abs(im))}j`; }
+
+function drawGrid(ctx,A,labX,labY,opt){
+  const M=A.M; opt=opt||{};
+  ctx.save(); ctx.beginPath(); ctx.rect(PAD.l,PAD.t,M.W,M.H); ctx.clip();
+  ctx.font='10px ui-monospace,monospace';
+  const sx=niceStep(A.x1max-A.x1min,8), sy=niceStep(A.x2max-A.x2min,7);
+  for(let x=Math.ceil(A.x1min/sx)*sx; x<=A.x1max; x+=sx){
+    const [px]=D2P(x,A.x2min,A), zero=Math.abs(x)<1e-9;
+    ctx.strokeStyle=zero?(opt.zx||'rgba(138,166,198,.5)'):'rgba(138,166,198,.12)'; ctx.lineWidth=zero?1.4:1;
+    ctx.beginPath();ctx.moveTo(px,PAD.t);ctx.lineTo(px,PAD.t+M.H);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)'; ctx.fillText(fmtTick(x),px+3,PAD.t+M.H-4);
+  }
+  for(let y=Math.ceil(A.x2min/sy)*sy; y<=A.x2max; y+=sy){
+    const [,py]=D2P(A.x1min,y,A), zero=Math.abs(y)<1e-9;
+    ctx.strokeStyle=zero?(opt.zy||'rgba(138,166,198,.5)'):'rgba(138,166,198,.12)'; ctx.lineWidth=zero?1.4:1;
+    ctx.beginPath();ctx.moveTo(PAD.l,py);ctx.lineTo(PAD.l+M.W,py);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)'; ctx.fillText(fmtTick(y),PAD.l+3,py-3);
+  }
+  ctx.restore();
+  ctx.fillStyle='rgba(138,166,198,.85)';ctx.font='11px ui-monospace,monospace';
+  ctx.fillText(labX,PAD.l+M.W-54,PAD.t+M.H+18); ctx.fillText(labY,6,PAD.t+10);
+}
+
+/* ================================================================
+   3. BUILD THE SIMULATION (analytic — no ODE) + fit the view
+   ================================================================ */
+function partialSums(t){                                    // running partial sums P0..Pn at time t
+  const P=[{re:0,im:0}];
+  for(let k=0;k<sim.c.length;k++){
+    const v=termVal(sim.c[k],sim.s[k],t);
+    P.push({re:P[k].re+v.re, im:P[k].im+v.im});
+  }
+  return P;                                                 // length = nterms+1 ; P[n] = f(t)
+}
+function fAt(t){ let re=0,im=0;                             // exact f(t) by direct summation
+  for(let k=0;k<sim.c.length;k++){ const v=termVal(sim.c[k],sim.s[k],t); re+=v.re; im+=v.im; }
+  return {re,im}; }
+
+function buildSim(){
+  const c=terms.map(t=>t.cval), s=terms.map(t=>t.sval);
+  const T=Math.max(parseFloat(el('dur').value),1e-6), N=1500;
+  const f=new Array(N+1);
+  let minRe=0,maxRe=0,minIm=0,maxIm=0;                      // origin (0,0) is always in view
+  for(let i=0;i<=N;i++){
+    const t=T*i/N; let re=0,im=0;
+    for(let k=0;k<c.length;k++){                            // accumulate; every partial sum expands the bbox
+      const v=termVal(c[k],s[k],t); re+=v.re; im+=v.im;
+      if(isFinite(re)&&isFinite(im)){
+        if(re<minRe)minRe=re; if(re>maxRe)maxRe=re;
+        if(im<minIm)minIm=im; if(im>maxIm)maxIm=im;
+      }
+    }
+    f[i]={t,re,im};
+  }
+  return {c,s,T,N,f,bbox:{minRe,maxRe,minIm,maxIm}};
+}
+function fitViewToBBox(b){
+  const finite=[b.minRe,b.maxRe,b.minIm,b.maxIm].every(isFinite);
+  if(!finite){ Object.assign(viewP,viewP0); return; }
+  const cx=(b.minRe+b.maxRe)/2, cy=(b.minIm+b.maxIm)/2;
+  const hw=Math.max((b.maxRe-b.minRe)/2*1.18, 0.5);
+  const hh=Math.max((b.maxIm-b.minIm)/2*1.18, 0.5);
+  viewP.x1min=cx-hw; viewP.x1max=cx+hw; viewP.x2min=cy-hh; viewP.x2max=cy+hh;
+}
+
+/* ================================================================
+   4. RENDER — the complex plane (left). Static layer (grid + full dim
+      trace of f) is cached; the moving phasor chain + traced tip are
+      drawn on top every frame.
+   ================================================================ */
+const phasorCache=document.createElement('canvas'); let phDpr=1;
+function renderPhasorStatic(){
+  const cv=el('phasor'); const dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight;
+  cv.width=w*dpr; cv.height=h*dpr; phasorCache.width=w*dpr; phasorCache.height=h*dpr; phDpr=dpr;
+  const ctx=phasorCache.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
+  const A=actual(cv,viewP); const M=A.M;
+  drawGrid(ctx,A,'Re','Im',{});
+  // faint full trace of the tip path f(t) over the whole duration
+  if(sim){
+    ctx.save(); ctx.beginPath(); ctx.rect(PAD.l,PAD.t,M.W,M.H); ctx.clip();
+    ctx.strokeStyle='rgba(138,166,198,.28)'; ctx.lineWidth=1.4; ctx.lineJoin='round'; ctx.beginPath();
+    let pen=false;
+    for(let i=0;i<=sim.N;i++){ const p=sim.f[i];
+      if(!isFinite(p.re)||!isFinite(p.im)){pen=false;continue;}
+      const [x,y]=D2P(p.re,p.im,A); pen?ctx.lineTo(x,y):ctx.moveTo(x,y); pen=true; }
+    ctx.stroke(); ctx.restore();
+  }
+  // origin marker
+  const [ox,oy]=D2P(0,0,A);
+  ctx.strokeStyle='rgba(234,241,251,.55)'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.arc(ox,oy,3,0,7); ctx.stroke();
+}
+function drawVector(ctx,A,a,b,color){
+  const [x0,y0]=D2P(a.re,a.im,A), [x1,y1]=D2P(b.re,b.im,A);
+  ctx.strokeStyle=color; ctx.lineWidth=2.2; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+  const ang=Math.atan2(y1-y0,x1-x0), hl=9, dist=Math.hypot(x1-x0,y1-y0);
+  if(dist>5){                                               // arrowhead only if the vector is long enough to carry one
+    ctx.beginPath();
+    ctx.moveTo(x1,y1); ctx.lineTo(x1-hl*Math.cos(ang-0.4),y1-hl*Math.sin(ang-0.4));
+    ctx.moveTo(x1,y1); ctx.lineTo(x1-hl*Math.cos(ang+0.4),y1-hl*Math.sin(ang+0.4));
+    ctx.stroke();
+  }
+}
+function renderPhasorFrame(){
+  const cv=el('phasor'); const ctx=cv.getContext('2d');
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
+  if(phasorCache.width) ctx.drawImage(phasorCache,0,0);
+  const dpr=phDpr||1; ctx.setTransform(dpr,0,0,dpr,0,0);
+  if(!sim) return;
+  const A=actual(cv,viewP); const M=A.M;
+  ctx.save(); ctx.beginPath(); ctx.rect(PAD.l,PAD.t,M.W,M.H); ctx.clip();
+  // bright portion of the tip path traced so far (0 .. tc)
+  const idx=clamp(Math.round(tc/sim.T*sim.N),0,sim.N);
+  ctx.strokeStyle='rgba(234,241,251,.9)'; ctx.lineWidth=1.8; ctx.lineJoin='round'; ctx.beginPath();
+  let pen=false;
+  for(let i=0;i<=idx;i++){ const p=sim.f[i];
+    if(!isFinite(p.re)||!isFinite(p.im)){pen=false;continue;}
+    const [x,y]=D2P(p.re,p.im,A); pen?ctx.lineTo(x,y):ctx.moveTo(x,y); pen=true; }
+  ctx.stroke();
+  // the phasor chain at time tc
+  const P=partialSums(tc), n=sim.c.length;
+  for(let k=0;k<n;k++){ const a=P[k], b=P[k+1];
+    if(!isFinite(b.re)||!isFinite(b.im)) continue;
+    drawVector(ctx,A,a,b,TERM_COLORS[k%TERM_COLORS.length]); }
+  // joints between vectors
+  for(let k=1;k<n;k++){ const p=P[k]; if(!isFinite(p.re)) continue;
+    const [x,y]=D2P(p.re,p.im,A); ctx.fillStyle='rgba(234,241,251,.9)';
+    ctx.beginPath(); ctx.arc(x,y,2.4,0,7); ctx.fill(); }
+  // the tip = f(tc)
+  const tip=P[n];
+  if(isFinite(tip.re)&&isFinite(tip.im)){
+    const [x,y]=D2P(tip.re,tip.im,A);
+    ctx.shadowColor='#fff'; ctx.shadowBlur=12; ctx.fillStyle='#fff';
+    ctx.beginPath(); ctx.arc(x,y,4.5,0,7); ctx.fill(); ctx.shadowBlur=0;
+  }
+  ctx.restore();
+}
+
+/* ================================================================
+   5. RENDER — Re & Im of f(t) vs t (right). Static layer (grid +
+      curves) cached; only the playhead + value dots redraw per frame.
+   ================================================================ */
+const timeCache=document.createElement('canvas'); let tmDpr=1; let tlay=null;
+function renderTimeStatic(){
+  const cv=el('tplot'); const dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight;
+  cv.width=w*dpr; cv.height=h*dpr; timeCache.width=w*dpr; timeCache.height=h*dpr; tmDpr=dpr;
+  const ctx=timeCache.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
+  const pL=48,pR=14,pT=14,pB=26, W=w-pL-pR, H=h-pT-pB;
+  const f = sim?sim.f:[{t:0,re:0,im:0},{t:1,re:0,im:0}];
+  const Tend=Math.max(sim?sim.T:1,1e-6);
+  // y-range: true min/max, but capped to a few × the early-window peak so a
+  // growing sum's late blow-up clips off-screen instead of crushing the early detail.
+  let lo=Infinity,hi=-Infinity,em=0; const k=Math.max(3,Math.ceil(0.15*f.length));
+  for(let i=0;i<f.length;i++){ const p=f[i];
+    if(isFinite(p.re)){ if(p.re<lo)lo=p.re; if(p.re>hi)hi=p.re; if(i<k)em=Math.max(em,Math.abs(p.re)); }
+    if(isFinite(p.im)){ if(p.im<lo)lo=p.im; if(p.im>hi)hi=p.im; if(i<k)em=Math.max(em,Math.abs(p.im)); } }
+  if(em>0){ hi=Math.min(hi,4*em); lo=Math.max(lo,-4*em); }
+  if(!isFinite(lo)||!isFinite(hi)||hi-lo<1e-9){ lo=-1; hi=1; }
+  lo=Math.min(lo,0); hi=Math.max(hi,0);                     // keep the zero axis in view
+  const m=(hi-lo)*0.1; lo-=m; hi+=m;
+  tlay={pL,pR,pT,pB,W,H,Tend,lo,hi};
+  const X=t=>pL+(t/Tend)*W, Y=v=>pT+(1-(v-lo)/(hi-lo))*H;
+  ctx.font='10px ui-monospace,monospace';
+  const sy=niceStep(hi-lo,5);
+  for(let y=Math.ceil(lo/sy)*sy;y<=hi;y+=sy){ const yy=Y(y);
+    ctx.strokeStyle=Math.abs(y)<1e-9?'rgba(138,166,198,.4)':'rgba(138,166,198,.12)';
+    ctx.lineWidth=1; ctx.beginPath();ctx.moveTo(pL,yy);ctx.lineTo(pL+W,yy);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)';ctx.fillText(fmtTick(y),4,yy+3); }
+  const sx=niceStep(Tend,6);
+  for(let x=0;x<=Tend+1e-9;x+=sx){ const xx=X(x);
+    ctx.strokeStyle='rgba(138,166,198,.12)';ctx.beginPath();ctx.moveTo(xx,pT);ctx.lineTo(xx,pT+H);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)';ctx.fillText(fmtTick(x),xx+2,pT+H+15); }
+  ctx.fillStyle='rgba(138,166,198,.8)';ctx.fillText('t (s)',pL+W-30,pT+H+15);
+  // curves
+  ctx.save(); ctx.beginPath(); ctx.rect(pL,pT,W,H); ctx.clip();
+  tline(ctx,f,'im',X,Y,'#FFCB05'); tline(ctx,f,'re',X,Y,'#57C7FF');
+  ctx.restore();
+}
+function tline(ctx,pts,key,X,Y,color){
+  ctx.strokeStyle=color; ctx.lineWidth=1.8; ctx.lineJoin='round'; ctx.beginPath();
+  let pen=false;
+  for(let i=0;i<pts.length;i++){ const v=pts[i][key];
+    if(!isFinite(v)||!isFinite(pts[i].t)){pen=false;continue;}
+    const x=X(pts[i].t),y=Y(v); pen?ctx.lineTo(x,y):ctx.moveTo(x,y); pen=true; }
+  ctx.stroke();
+}
+function renderTimeFrame(){
+  const cv=el('tplot'); const ctx=cv.getContext('2d');
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
+  if(timeCache.width) ctx.drawImage(timeCache,0,0);
+  const dpr=tmDpr||1; ctx.setTransform(dpr,0,0,dpr,0,0);
+  if(!sim||!tlay) return;
+  const {pL,pT,W,H,Tend,lo,hi}=tlay;
+  const X=t=>pL+(t/Tend)*W, Y=v=>pT+(1-(v-lo)/(hi-lo))*H;
+  const xx=X(clamp(tc,0,Tend));
+  ctx.save(); ctx.beginPath(); ctx.rect(pL,pT,W,H); ctx.clip();
+  ctx.strokeStyle='rgba(234,241,251,.5)'; ctx.lineWidth=1.2; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(xx,pT); ctx.lineTo(xx,pT+H); ctx.stroke(); ctx.setLineDash([]);
+  const p=fAt(tc);
+  const dot=(v,col)=>{ if(!isFinite(v)) return; const y=Y(v);
+    ctx.fillStyle=col; ctx.shadowColor=col; ctx.shadowBlur=8;
+    ctx.beginPath(); ctx.arc(xx,y,3.6,0,7); ctx.fill(); ctx.shadowBlur=0; };
+  dot(p.im,'#FFCB05'); dot(p.re,'#57C7FF');
+  ctx.restore();
+}
+
+/* ================================================================
+   6. EXPRESSION-BUILDER DOM
+   ================================================================ */
+function renderTerms(){
+  const wrap=el('terms'); wrap.innerHTML='';
+  terms.forEach((tm,i)=>{
+    const col=TERM_COLORS[i%TERM_COLORS.length];
+    const row=document.createElement('div'); row.className='term';
+    row.innerHTML=
+      `<span class="conn">${i===0?'f(t)&nbsp;=':'+'}</span>`+
+      `<span class="chip" style="background:${col};color:${col}"></span>`+
+      `<input class="cin coef" data-i="${i}" data-f="coef" value="${esc(tm.coef)}" spellcheck="false">`+
+      `<span class="op">e</span><span class="sup">^(</span>`+
+      `<input class="cin exp" data-i="${i}" data-f="exp" value="${esc(tm.exp)}" spellcheck="false">`+
+      `<span class="sup">t )</span>`+
+      `<button class="rm" data-i="${i}" title="remove term"${terms.length<=1?' disabled':''}>✕</button>`;
+    wrap.appendChild(row);
+  });
+  wrap.querySelectorAll('.cin').forEach(inp=>inp.addEventListener('input',()=>{
+    terms[+inp.dataset.i][inp.dataset.f]=inp.value; validate(); markDirty();
+  }));
+  wrap.querySelectorAll('.rm').forEach(b=>b.addEventListener('click',()=>removeTerm(+b.dataset.i)));
+  el('addTerm').disabled = terms.length>=8;
+}
+function addTerm(){ if(terms.length>=8) return; terms.push({coef:'0.3',exp:'1j'}); renderTerms(); validate(); markDirty(); }
+function removeTerm(i){ if(terms.length<=1) return; terms.splice(i,1); renderTerms(); validate(); markDirty(); }
+
+// parse every field, flag the bad ones, gate the Run button
+function validate(){
+  let ok=true;
+  terms.forEach(tm=>{
+    tm.cval=parseComplex(tm.coef); tm.sval=parseComplex(tm.exp);
+    tm.cErr=!tm.cval; tm.sErr=!tm.sval;
+    if(tm.cErr||tm.sErr) ok=false;
+  });
+  const T=parseFloat(el('dur').value), Tok=isFinite(T)&&T>0; if(!Tok) ok=false;
+  const coefs=el('terms').querySelectorAll('.coef'), exps=el('terms').querySelectorAll('.exp');
+  terms.forEach((tm,i)=>{ if(coefs[i])coefs[i].classList.toggle('bad',tm.cErr); if(exps[i])exps[i].classList.toggle('bad',tm.sErr); });
+  el('dur').classList.toggle('bad',!Tok);
+  el('run').disabled=!ok;
+  const st=el('exprStatus');
+  if(!ok){ st.className='status err'; st.textContent = !Tok ? 'Duration must be a positive number.' : 'Some boxes are not valid complex numbers (try e.g. 0.5, -2j, 1+3j).'; }
+  else if(dirty){ st.className='status warn'; st.textContent='Edited — press Run to update the visualization.'; }
+  else { st.className='status'; st.textContent=`${terms.length} term${terms.length>1?'s':''}.`; }
+  return ok;
+}
+function markDirty(){ if(!sim) return; dirty=true; el('run').classList.add('dirty'); validate(); }
+
+/* ================================================================
+   7. TRANSPORT + READOUTS
+   ================================================================ */
+function setPlayBtn(){ el('play').innerHTML = playing ? '❚❚&nbsp;Pause' : '▶&nbsp;Play'; }
+function updateReadouts(){
+  if(!sim){ el('roT').textContent='—'; el('roF').textContent='—'; return; }
+  el('roT').textContent=`${tc.toFixed(2)} / ${sim.T.toFixed(2)} s`;
+  const p=fAt(tc); el('roF').textContent=fmtC(p.re,p.im);
+}
+
+/* ================================================================
+   8. BUILD + RUN
+   ================================================================ */
+function buildAndRun(){
+  if(!validate()) return;
+  sim=buildSim();
+  fitViewToBBox(sim.bbox);
+  tc=0; playing=true; dirty=false;
+  el('run').classList.remove('dirty'); setPlayBtn();
+  renderPhasorStatic(); renderTimeStatic(); syncAxisFields(); validate(); updateReadouts();
+}
+
+/* ================================================================
+   9. INTERACTION — pan/zoom/fit on the complex plane, scrub on the
+      time plot, field <-> view sync
+   ================================================================ */
+function clampView(v){
+  if(v.x1max-v.x1min<1e-3){const c=(v.x1min+v.x1max)/2;v.x1min=c-5e-4;v.x1max=c+5e-4;}
+  if(v.x2max-v.x2min<1e-3){const c=(v.x2min+v.x2max)/2;v.x2min=c-5e-4;v.x2max=c+5e-4;}
+}
+function syncAxisFields(){
+  el('pRe0').value=+viewP.x1min.toFixed(3); el('pRe1').value=+viewP.x1max.toFixed(3);
+  el('pIm0').value=+viewP.x2min.toFixed(3); el('pIm1').value=+viewP.x2max.toFixed(3);
+}
+// complex plane: drag = pan, wheel = zoom
+(function(){
+  const cv=el('phasor'); let down=null;
+  cv.addEventListener('mousedown',e=>{ const r=cv.getBoundingClientRect();
+    down={lx:e.clientX-r.left,ly:e.clientY-r.top}; });
+  window.addEventListener('mousemove',e=>{
+    if(!down) return;
+    const r=cv.getBoundingClientRect(), x=e.clientX-r.left, y=e.clientY-r.top, A=actual(cv,viewP);
+    const dx=x-down.lx, dy=y-down.ly, rx=viewP.x1max-viewP.x1min, ry=viewP.x2max-viewP.x2min;
+    viewP.x1min-=dx/A.M.W*rx; viewP.x1max-=dx/A.M.W*rx;
+    viewP.x2min+=dy/A.M.H*ry; viewP.x2max+=dy/A.M.H*ry;
+    down.lx=x; down.ly=y; syncAxisFields(); renderPhasorStatic();
+  });
+  window.addEventListener('mouseup',()=>{ down=null; });
+  cv.addEventListener('wheel',e=>{
+    e.preventDefault();
+    const r=cv.getBoundingClientRect(), A=actual(cv,viewP), [dx,dy]=P2D(e.clientX-r.left,e.clientY-r.top,A);
+    const f=e.deltaY>0?1.1:1/1.1;
+    viewP.x1min=dx-(dx-viewP.x1min)*f; viewP.x1max=dx+(viewP.x1max-dx)*f;
+    viewP.x2min=dy-(dy-viewP.x2min)*f; viewP.x2max=dy+(viewP.x2max-dy)*f;
+    clampView(viewP); syncAxisFields(); renderPhasorStatic();
+  },{passive:false});
+})();
+// time plot: click / drag to scrub (pauses playback)
+(function(){
+  const cv=el('tplot'); let down=false;
+  const scrub=e=>{ if(!sim||!tlay) return; const r=cv.getBoundingClientRect();
+    const x=e.clientX-r.left; tc=clamp((x-tlay.pL)/tlay.W*tlay.Tend,0,tlay.Tend); };
+  cv.addEventListener('mousedown',e=>{ down=true; playing=false; setPlayBtn(); scrub(e); });
+  window.addEventListener('mousemove',e=>{ if(down) scrub(e); });
+  window.addEventListener('mouseup',()=>{ down=false; });
+})();
+function axisHandler(ids,v,after){ ids.forEach(id=>el(id).addEventListener('change',()=>{
+  const a=parseFloat(el(ids[0]).value),b=parseFloat(el(ids[1]).value),c=parseFloat(el(ids[2]).value),d=parseFloat(el(ids[3]).value);
+  if(isFinite(a)&&isFinite(b)&&b>a){v.x1min=a;v.x1max=b;}
+  if(isFinite(c)&&isFinite(d)&&d>c){v.x2min=c;v.x2max=d;}
+  after();
+})); }
+axisHandler(['pRe0','pRe1','pIm0','pIm1'],viewP,()=>renderPhasorStatic());
+
+el('addTerm').onclick=addTerm;
+el('run').onclick=buildAndRun;
+el('play').onclick=()=>{ playing=!playing; setPlayBtn(); };
+el('restart').onclick=()=>{ tc=0; };
+el('fit').onclick=()=>{ if(sim){ fitViewToBBox(sim.bbox); syncAxisFields(); renderPhasorStatic(); } };
+el('dur').addEventListener('input',()=>{ validate(); markDirty(); });
+el('spd').addEventListener('input',()=>{ speed=parseFloat(el('spd').value); el('spdV').textContent=speed.toFixed(1)+'×'; });
+// Enter in any expression / duration field triggers a run
+el('terms').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!el('run').disabled) buildAndRun(); });
+el('dur').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!el('run').disabled) buildAndRun(); });
+
+/* ================================================================
+   10. ANIMATION LOOP
+   ================================================================ */
+let lastWall=0;
+function loop(now){
+  if(!lastWall) lastWall=now;
+  const dtw=Math.min(0.05,(now-lastWall)/1000); lastWall=now;
+  if(playing && sim){ tc+=dtw*speed; if(tc>sim.T) tc-=sim.T; }   // loop the cursor
+  renderPhasorFrame(); renderTimeFrame(); updateReadouts();
+  requestAnimationFrame(loop);
+}
+
+/* ================================================================
+   11. BOOT
+   ================================================================ */
+let rz=null;
+window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ renderPhasorStatic(); renderTimeStatic(); },80); });
+renderTerms(); buildAndRun();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

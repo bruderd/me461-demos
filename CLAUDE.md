@@ -70,6 +70,9 @@ teaching artifact. The reference implementation is `demos/cruise-control/index.h
 - [x] Complex Exponential Explorer (`demos/complex-exponential/`) — place a pole s = σ+jω
       in the s-plane, watch the mode e^{st} spiral (decay / sustain / grow) live like a 2-D
       slider; Re/Im-vs-t strip, ζ & ωₙ readouts, conjugate-pair toggle.
+- [x] Sum of Complex Exponentials (`demos/sum-of-exponentials/`) — build f(t) = Σ cₖe^{sₖt}
+      from up to 8 complex phasors, watch them chain tip-to-tail in the complex plane (tip =
+      f(t)) and trace Re/Im of f(t) in time; a conjugate pair sums to a real cosine (default).
 - [ ] DC motor (position/speed control; V→current→torque).
 - [ ] Inverted pendulum / cart-pole (stabilization; nonlinear, great for state feedback).
 - [ ] Ball & beam.
@@ -110,7 +113,47 @@ Keep all of them on the same skeleton so students recognize the interface across
 
 Where we left off, so the conversation can be cleared and resumed later.
 
-### Status: Complex Exponential Explorer is DONE + verified — NOT committed (newest work).
+### Status: Sum of Complex Exponentials is DONE + verified — NOT committed (newest work).
+- Files: `demos/sum-of-exponentials/index.html` (self-contained single file) and its
+  landing-page card in `index.html` (added, right after the Complex Exponential card).
+  Roadmap checkbox above is ticked. Live target once pushed:
+  `https://danielbruder.com/me461-demos/demos/sum-of-exponentials/`.
+- Still uncommitted along with all the prior uncommitted work (Complex Exponential,
+  Linearization, index.html cards, this CLAUDE.md). Standing rule: commit/push only when
+  asked; verify git state first (working dir may not be the git root).
+
+**What it is.** Top = an editable expression `f(t) = Σ cₖ e^{sₖ t}`; each term is two
+complex-number text boxes (coefficient cₖ, exponent sₖ) with a colour chip, an **+ Add term**
+button (cap 8), and a per-row ✕ remove (min 1). A **Run** button (re)builds the sim; **▶/❚❚**,
+**⟲ restart**, and a **speed** slider drive playback; **Duration** sets the horizon. Default =
+two conjugate terms `0.5 e^{2jt} + 0.5 e^{-2jt}` = the real signal cos 2t.
+- **Left panel = the complex value plane** (NOT the s-plane — the user said "s-plane" but the
+  vectors are *values* cₖe^{sₖt}, not poles, so labelling it s-plane would be a math error;
+  it's labelled "Complex plane" with a header note). Phasors chain **tip-to-tail** from the
+  origin (running partial sums); the last tip = f(t), a glowing dot that traces the curve.
+  Full tip-path drawn dim, traced-so-far bright. Pan/drag, wheel-zoom, **Fit ⤢** (frames the
+  precomputed bbox of all partial sums).
+- **Right panel = Re & Im of f(t) vs t**, with a dashed playhead + value dots; **click/drag
+  to scrub** (pauses). y-range capped at 4× the early-window peak (same trick as the sibling
+  demos) so a growing sum's blow-up clips instead of crushing early detail.
+
+**Non-obvious plumbing.** f(t) is sampled **analytically** (`termVal = Cmul(c, e^{st})`, no
+ODE). `buildSim()` samples N=1500 pts over [0,T], accumulating each partial sum to grow the
+bbox (captures every vector joint, not just the tip). `parseComplex()` accepts `3`, `-2.5`,
+`.5`, `2j`/`2i`, `j`, `-j`, `1+2j`, `3 - 4i`, `2j+1` (regex-validated per signed chunk;
+rejects junk → red field + disabled Run). Reuses the sibling's equal-aspect `actual()`/`D2P`
+canvas machinery. Two cached static layers (grid+dim-trace ; grid+Re/Im curves) blitted each
+frame with only the moving chain / playhead redrawn — same architecture as complex-exponential.
+Term colours by row index (`TERM_COLORS[i]`), so chip ↔ vector always match; editing a field
+marks the Run button `.dirty` (maize pulse) until re-run.
+
+**Verified this session** (scratchpad): `node --check` clean; 22/22 logic asserts
+(`test_logic.mjs` — parser cases incl. rejections, default sum ≡ cos 2t with Im≡0, growing-term
+magnitude e^5); headless-Chrome (Chrome.app, no puppeteer, `--headless=new` + DOM-driving probe
++ `--screenshot`/`--dump-dom`) → no JS errors, default renders the counter-rotating "roof" with
+tip on the real axis, and a driven 4-harmonic case renders the epicycle chain + complex Re/Im.
+
+### Status: Complex Exponential Explorer is DONE + verified — NOT committed.
 - Files: `demos/complex-exponential/index.html` (self-contained single file) and its
   landing-page card in `index.html` (added). The roadmap checkbox above is ticked.
 - Live target once pushed: `https://danielbruder.com/me461-demos/demos/complex-exponential/`.
