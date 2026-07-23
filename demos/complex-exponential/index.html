@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MECHENG 461 · Complex Exponential e^{st}</title>
+<style>
+  /* ---- Instrument-cluster aesthetic: navy panel, maize accent, mono telemetry ---- */
+  :root{
+    --navy:#00274C; --navy-2:#0A1B33; --panel:#102A4C;
+    --maize:#FFCB05; --cyan:#57C7FF; --ink:#EAF1FB; --muted:#8AA6C6;
+    --grid:rgba(138,166,198,.16); --good:#5BD6A0; --bad:#FF6B6B;
+    --x1:#57C7FF;          /* Re(e^{st}) colour */
+    --x2:#FFCB05;          /* Im(e^{st}) colour */
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--navy-2)}
+  body{background:linear-gradient(180deg,#0B1A30,#08111F 60%);color:var(--ink);font-family:var(--sans);
+       -webkit-font-smoothing:antialiased;padding:22px;min-height:100vh}
+  .wrap{max-width:1180px;margin:0 auto}
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:4px}
+  header .tag{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--maize);
+              border:1px solid rgba(255,203,5,.35);padding:3px 8px;border-radius:4px}
+  h1{font-size:20px;font-weight:650;margin:0;letter-spacing:.01em}
+  header .sub{color:var(--muted);font-size:13px}
+  .card{background:linear-gradient(180deg,var(--panel),#0C2140);border:1px solid rgba(138,166,198,.16);
+        border-radius:12px;padding:14px;margin-top:16px}
+  .card h2{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+           color:var(--muted);margin:0 0 10px;font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .card h2 .note{font-family:var(--sans);letter-spacing:0;text-transform:none;font-size:11px;color:var(--muted);font-weight:400}
+  .card h2 .m{text-transform:none;letter-spacing:.02em;font-size:12px}   /* inline math keeps its case */
+  canvas{display:block;width:100%;border-radius:8px}
+  .plane{height:392px}
+  @media(max-width:820px){.plane{height:340px}}
+  #splane{background:radial-gradient(120% 120% at 50% 45%,#0d2a52,#0a1830);cursor:crosshair;touch-action:none}
+  #est{background:radial-gradient(120% 120% at 50% 50%,#0d2740,#0a1526);cursor:grab;touch-action:none}
+  #est:active{cursor:grabbing}
+  .tcanvas{background:linear-gradient(180deg,#0d2a52,#0a1830);height:196px}
+
+  input[type=text],input[type=number]{background:#08182f;color:#cfe3ff;border:1px solid rgba(138,166,198,.2);
+    border-radius:8px;padding:8px 9px;font-family:var(--mono);font-size:14px;width:100%}
+  input[type=text]:focus,input[type=number]:focus{outline:none;border-color:rgba(255,203,5,.6)}
+  code{font-family:var(--mono);background:#0a1d38;padding:1px 5px;border-radius:4px;font-size:12px}
+
+  /* ---- shared run controls ---- */
+  .ctrls{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;justify-content:space-between}
+  .fields{display:flex;gap:12px;flex-wrap:wrap}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  .field input{width:112px}
+  .field.ic .k{color:var(--maize)}
+  .field.ic input{border-color:rgba(255,203,5,.4)}
+  .readouts{display:flex;gap:8px;flex-wrap:wrap}
+  .ro{background:#0A1D38;border:1px solid rgba(138,166,198,.14);border-radius:8px;padding:6px 10px}
+  .ro .k{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  .ro .v{font-family:var(--mono);font-size:15px;font-weight:600;margin-top:1px}
+  .ro.mode .v{font-family:var(--sans)}
+
+  .btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  button{font-family:var(--sans);font-size:13px;font-weight:600;border:1px solid rgba(138,166,198,.25);
+    background:#122f52;color:var(--ink);padding:9px 15px;border-radius:8px;cursor:pointer;transition:.12s}
+  button:hover{background:#173a66}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .toggle{display:inline-flex;border:1px solid rgba(138,166,198,.28);border-radius:8px;overflow:hidden}
+  .toggle button{border:0;border-radius:0;padding:9px 13px;font-size:13px;background:#0a1d38;color:var(--muted)}
+  .toggle button.on{background:var(--maize);color:#08213f}
+
+  /* ---- compact per-panel axis controls ---- */
+  .axisrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 9px;min-height:32px}
+  .axisrow .grp{display:flex;align-items:center;gap:4px}
+  .axisrow .al{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .axisrow input{width:58px;padding:5px 6px;font-size:12px}
+
+  /* ---- two columns ---- */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  .col{display:flex;flex-direction:column;gap:16px}
+  .legend{display:flex;gap:12px;margin-left:auto}
+  .legend span{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .legend i{width:14px;height:3px;border-radius:2px;display:inline-block}
+  .status{font-size:12px;color:var(--muted);min-height:15px}
+  .status.warn{color:var(--maize)}
+
+  /* ---- mode-analysis panel ---- */
+  .anlz{display:flex;flex-direction:column;gap:7px}
+  .anlz .row{display:flex;justify-content:space-between;gap:12px;align-items:baseline;
+             border-bottom:1px dashed rgba(138,166,198,.14);padding-bottom:6px}
+  .anlz .row:last-child{border-bottom:0;padding-bottom:0}
+  .anlz .lab{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
+  .anlz .val{font-family:var(--mono);font-size:12px;color:var(--ink);text-align:right}
+  .anlz .val.big{font-family:var(--sans);font-weight:600;font-size:13px}
+  .anlz .val.big.stable{color:var(--good)} .anlz .val.big.unstable{color:var(--bad)} .anlz .val.big.marginal{color:var(--maize)}
+
+  footer{color:var(--muted);font-size:12px;margin-top:16px;line-height:1.6}
+  footer b{color:var(--ink);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="tag">MECHENG&nbsp;461</span>
+    <h1>Complex Exponential Explorer</h1>
+    <span class="sub">place a pole s = σ + jω in the s-plane and watch the mode e<sup>st</sup> it generates</span>
+  </header>
+
+  <!-- ============ CONTROLS ============ -->
+  <div class="card ctrls">
+    <div class="fields">
+      <div class="field ic"><span class="k">Re(s) = σ</span><input id="sig" type="number" step="any" value="-0.4"></div>
+      <div class="field ic"><span class="k">Im(s) = ω</span><input id="om"  type="number" step="any" value="3.2"></div>
+    </div>
+    <div class="readouts">
+      <div class="ro"><div class="k">s</div><div class="v" id="roS">—</div></div>
+      <div class="ro"><div class="k">ωₙ = |s|</div><div class="v" id="roWn">—</div></div>
+      <div class="ro"><div class="k">ζ = −σ/|s|</div><div class="v" id="roZ">—</div></div>
+      <div class="ro mode"><div class="k">mode</div><div class="v" id="roMode">—</div></div>
+    </div>
+    <div class="btns">
+      <span class="toggle">
+        <button id="cjOff" class="on">single&nbsp;s</button>
+        <button id="cjOn">+ conjugate&nbsp;s&#772;</button>
+      </span>
+      <button id="fit">Fit&nbsp;⤢</button>
+      <button id="reset">Reset view</button>
+    </div>
+  </div>
+
+  <!-- ============ TWO COLUMNS ============ -->
+  <div class="grid">
+
+    <!-- LEFT: the s-plane -->
+    <div class="col">
+      <div class="card">
+        <h2>s-plane · pole location <span class="note">drag the marker · scroll = zoom · drag background = pan</span></h2>
+        <div class="axisrow">
+          <span class="grp"><span class="al">Re s</span><input id="lRe0" type="number" step="any"><input id="lRe1" type="number" step="any"></span>
+          <span class="grp"><span class="al">Im s</span><input id="lIm0" type="number" step="any"><input id="lIm1" type="number" step="any"></span>
+        </div>
+        <canvas id="splane" class="plane"></canvas>
+        <div class="status" id="statS">Drag the marker anywhere — the right panel updates live.</div>
+      </div>
+      <div class="card">
+        <h2>Mode analysis <span class="note">what this pole means</span></h2>
+        <div class="anlz">
+          <div class="row"><span class="lab">e<sup>st</sup></span><span class="val">e<sup>σt</sup>·(cos ωt + j&thinsp;sin ωt)</span></div>
+          <div class="row"><span class="lab">|e<sup>st</sup>| = e<sup>σt</sup></span><span class="val" id="anMag">—</span></div>
+          <div class="row"><span class="lab">rotation</span><span class="val" id="anRot">—</span></div>
+          <div class="row"><span class="lab">per revolution</span><span class="val" id="anRev">—</span></div>
+          <div class="row"><span class="lab">verdict</span><span class="val big" id="anVerdict">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: the trajectory e^{st} -->
+    <div class="col">
+      <div class="card">
+        <h2><span class="m">e<sup>st</sup></span> · trajectory in the complex plane
+            <span class="note">starts at 1 when t = 0 · scroll = zoom · drag = pan</span></h2>
+        <div class="axisrow">
+          <span class="grp"><span class="al">Re</span><input id="rRe0" type="number" step="any"><input id="rRe1" type="number" step="any"></span>
+          <span class="grp"><span class="al">Im</span><input id="rIm0" type="number" step="any"><input id="rIm1" type="number" step="any"></span>
+        </div>
+        <canvas id="est" class="plane"></canvas>
+        <div class="status" id="statE"></div>
+      </div>
+      <div class="card">
+        <h2>Re &amp; Im of <span class="m">e<sup>st</sup></span> vs t
+          <span class="legend">
+            <span><i style="background:var(--x1)"></i>Re</span>
+            <span><i style="background:var(--x2)"></i>Im</span>
+          </span></h2>
+        <canvas id="tstrip" class="tcanvas"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <b>How it works.</b>&nbsp; A pole <em>s = σ + jω</em> generates the mode e<sup>st</sup> = e<sup>σt</sup>(cos ωt + j&thinsp;sin ωt):
+    a logarithmic spiral that <b>always starts at 1</b> (because e<sup>0</sup> = 1) and whose radius e<sup>σt</sup> is set purely by the
+    real part while ω sets the rate and direction of rotation. σ &lt; 0 (left half-plane) spirals inward and decays — <em>stable</em>;
+    σ &gt; 0 spirals outward and blows up — <em>unstable</em>; σ = 0 (the jω axis) rides the unit circle forever — <em>marginal</em>.
+    The right panel traces the mode until it leaves the visible window (or the decaying tail vanishes), so <b>zoom the right plot out</b>
+    to see more of a growing spiral, or <b>zoom into the origin</b> to see deeper into a decaying one. The comet shows the direction of
+    increasing t. Turn on <b>+ conjugate s&#772;</b> to add the mirror pole σ − jω: its trajectory is the mirror image across the real axis,
+    and the two sum to <em>2e<sup>σt</sup>cos ωt</em> — the real signal a physical second-order system actually produces. Nothing runs
+    on a server.
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ================================================================
+   0. STATE
+   ================================================================ */
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const el=id=>document.getElementById(id);
+
+let sigma=-0.4, omega=3.2;                               // the pole s = sigma + j*omega
+let conj=false;                                         // show the conjugate pole too?
+
+const viewL0={x1min:-4,x1max:2,x2min:-4,x2max:4};       // default s-plane window
+const viewR0={x1min:-1.6,x1max:1.6,x2min:-1.6,x2max:1.6};// default e^{st} window
+const viewL={...viewL0};                                // Re s (x1) × Im s (x2)
+const viewR={...viewR0};                                // Re e^{st} (x1) × Im e^{st} (x2)
+
+let traj=null;                                          // {pts:[{t,re,im,rad}], mirror:[...], tEnd, constant}
+let cometU=0;                                           // sweep phase in [0,1)
+const SWEEP=3.6;                                        // wall-clock seconds for one comet pass
+
+/* ================================================================
+   1. THE MODE  —  analytic e^{st}, plus its classification
+   ================================================================ */
+// Sample the trajectory of e^{st} for t>=0, stopping when it leaves the
+// visible window A (growing) or the decaying tail reaches the floor.
+function genTraj(sig,om,A){
+  if(Math.abs(sig)<1e-12 && Math.abs(om)<1e-12){
+    return {pts:[{t:0,re:1,im:0,rad:1}], mirror:[{t:0,re:1,im:0,rad:1}], tEnd:0, constant:true};
+  }
+  const boxW=A.x1max-A.x1min, boxH=A.x2max-A.x2min, vs=Math.max(boxW,boxH);
+  const mx=boxW*0.10, my=boxH*0.10;
+  const inBox=(re,im)=> re>=A.x1min-mx && re<=A.x1max+mx && im>=A.x2min-my && im<=A.x2max+my;
+  const decayFloor=Math.max(1e-6, vs*3e-4);             // relative to the window, so zooming in reveals more
+  const MAXREV=16, maxAngle=MAXREV*2*Math.PI, MAXPTS=4000, RADCEIL=1e7;
+  const aw=Math.abs(om), asig=Math.abs(sig);
+  const dtA = aw>1e-9 ? 0.05/aw : Infinity;             // <= ~0.05 rad of rotation per step
+  const dtR = asig>1e-9 ? 0.025/asig : Infinity;        // <= ~2.5% radius change per step
+  let dt=Math.min(dtA,dtR); if(!isFinite(dt)) dt=0.02; dt=Math.min(dt,0.4);
+  const mk=tt=>{const rad=Math.exp(sig*tt);return {t:tt,re:rad*Math.cos(om*tt),im:rad*Math.sin(om*tt),rad};};
+  const pts=[mk(0)]; let t=0, p;
+  while(pts.length<MAXPTS){
+    t+=dt; p=mk(t); pts.push(p);
+    if(!isFinite(p.re)||!isFinite(p.im)||p.rad>RADCEIL) break;
+    if(sig<0 && p.rad<decayFloor) break;                // decayed to the floor
+    if(sig>=0 && !inBox(p.re,p.im)) break;              // grew / rode out of the window
+    if(aw*t>maxAngle) break;                            // revolution cap (marginal / very light damping)
+  }
+  const mirror=pts.map(q=>({t:q.t,re:q.re,im:-q.im,rad:q.rad}));
+  return {pts, mirror, tEnd:pts[pts.length-1].t, constant:false};
+}
+
+function classify(sig,om){
+  const s0=Math.abs(sig)<1e-9, w0=Math.abs(om)<1e-9;
+  if(s0&&w0) return {short:'constant', stab:'marginal', text:'e^{st} = 1 for all t — a fixed point at 1.'};
+  const stab = sig<0?'stable':sig>0?'unstable':'marginal';
+  let text;
+  if(w0){ text = sig<0?'Stable — pure exponential decay to 0 along the real axis.'
+                      :'Unstable — pure exponential growth to ∞ along the real axis.'; }
+  else  { text = sig<0?'Stable — damped oscillation, spiralling inward to 0.'
+               : sig>0?'Unstable — growing oscillation, spiralling outward to ∞.'
+               :'Marginal — sustained oscillation, riding the unit circle forever.'; }
+  const short = stab + (w0?' · real':' · oscillatory');
+  return {short, stab, text};
+}
+
+/* ================================================================
+   2. CANVAS PLUMBING  —  equal-aspect fit (circles stay circular,
+      the s-plane damping angle reads true)
+   ================================================================ */
+const PAD={l:44,t:14,r:16,b:28};
+function fitDPR(cv){
+  const dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight;
+  cv.width=w*dpr; cv.height=h*dpr;
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx,w,h,dpr};
+}
+function metricsOf(cv){ const w=cv.clientWidth,h=cv.clientHeight; return {w,h,W:w-PAD.l-PAD.r,H:h-PAD.t-PAD.b}; }
+// derive the actually-displayed window from a requested box, with equal px/unit in x & y
+function actual(cv,v){
+  const M=metricsOf(cv);
+  const boxW=Math.max(v.x1max-v.x1min,1e-9), boxH=Math.max(v.x2max-v.x2min,1e-9);
+  const cx=(v.x1min+v.x1max)/2, cy=(v.x2min+v.x2max)/2;
+  const s=Math.min(M.W/boxW, M.H/boxH);                 // px per data-unit (same both axes)
+  const hw=M.W/s/2, hh=M.H/s/2;
+  return {M,s,x1min:cx-hw,x1max:cx+hw,x2min:cy-hh,x2max:cy+hh};
+}
+function D2P(x,y,A){ return [ PAD.l+(x-A.x1min)/(A.x1max-A.x1min)*A.M.W,
+                             PAD.t+(1-(y-A.x2min)/(A.x2max-A.x2min))*A.M.H ]; }
+function P2D(px,py,A){ return [ A.x1min+(px-PAD.l)/A.M.W*(A.x1max-A.x1min),
+                               A.x2min+(1-(py-PAD.t)/A.M.H)*(A.x2max-A.x2min) ]; }
+function niceStep(span,target){
+  const raw=span/target, mag=Math.pow(10,Math.floor(Math.log10(raw))), n=raw/mag;
+  return (n<1.5?1:n<3?2:n<7?5:10)*mag;
+}
+const fmt=v=>!isFinite(v)?'∞':Math.abs(v)>=100||v===0?v.toFixed(0):Math.abs(v)>=10?v.toFixed(1):v.toFixed(2);
+const fmtTick=v=>{const a=Math.abs(v);return a>=1000||(a<0.01&&a>0)?v.toExponential(0):(Math.round(v*100)/100).toString();};
+function fmtC(re,im){ const r=fmt(re); if(Math.abs(im)<1e-9) return r;
+  return `${r} ${im<0?'−':'+'} ${fmt(Math.abs(im))}j`; }
+const lerpHex=(a,b,t)=>{const A=[parseInt(a.slice(1,3),16),parseInt(a.slice(3,5),16),parseInt(a.slice(5,7),16)];
+  const B=[parseInt(b.slice(1,3),16),parseInt(b.slice(3,5),16),parseInt(b.slice(5,7),16)];
+  return `rgb(${A.map((v,i)=>Math.round(v+(B[i]-v)*t)).join(',')})`;};
+
+function drawGrid(ctx,A,labX,labY,opt){
+  const M=A.M; opt=opt||{};
+  ctx.save(); ctx.beginPath(); ctx.rect(PAD.l,PAD.t,M.W,M.H); ctx.clip();
+  ctx.font='10px ui-monospace,monospace';
+  const sx=niceStep(A.x1max-A.x1min,8), sy=niceStep(A.x2max-A.x2min,7);
+  for(let x=Math.ceil(A.x1min/sx)*sx; x<=A.x1max; x+=sx){
+    const [px]=D2P(x,A.x2min,A), zero=Math.abs(x)<1e-9;
+    ctx.strokeStyle=zero?(opt.zx||'rgba(138,166,198,.5)'):'rgba(138,166,198,.12)'; ctx.lineWidth=zero?1.4:1;
+    ctx.beginPath();ctx.moveTo(px,PAD.t);ctx.lineTo(px,PAD.t+M.H);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)'; ctx.fillText(fmtTick(x),px+3,PAD.t+M.H-4);
+  }
+  for(let y=Math.ceil(A.x2min/sy)*sy; y<=A.x2max; y+=sy){
+    const [,py]=D2P(A.x1min,y,A), zero=Math.abs(y)<1e-9;
+    ctx.strokeStyle=zero?(opt.zy||'rgba(138,166,198,.5)'):'rgba(138,166,198,.12)'; ctx.lineWidth=zero?1.4:1;
+    ctx.beginPath();ctx.moveTo(PAD.l,py);ctx.lineTo(PAD.l+M.W,py);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)'; ctx.fillText(fmtTick(y),PAD.l+3,py-3);
+  }
+  ctx.restore();
+  ctx.fillStyle='rgba(138,166,198,.85)';ctx.font='11px ui-monospace,monospace';
+  ctx.fillText(labX,PAD.l+M.W-54,PAD.t+M.H+18); ctx.fillText(labY,6,PAD.t+10);
+}
+
+/* ================================================================
+   3. RENDER — the s-plane (left)
+   ================================================================ */
+function renderSPlane(){
+  const cv=el('splane'); const {ctx}=fitDPR(cv); const A=actual(cv,viewL); const M=A.M;
+  ctx.clearRect(0,0,M.w,M.h);
+  // stable / unstable half-plane shading (split at the jω axis, Re s = 0)
+  const [zx]=D2P(0,A.x2min,A), x0=PAD.l, x1=PAD.l+M.W, zc=clamp(zx,x0,x1);
+  ctx.save(); ctx.beginPath(); ctx.rect(x0,PAD.t,M.W,M.H); ctx.clip();
+  ctx.fillStyle='rgba(91,214,160,.06)'; ctx.fillRect(x0,PAD.t,zc-x0,M.H);
+  ctx.fillStyle='rgba(255,107,107,.06)'; ctx.fillRect(zc,PAD.t,x1-zc,M.H);
+  ctx.restore();
+  drawGrid(ctx,A,'Re s = σ','Im s = ω',{zx:'rgba(255,203,5,.55)'});   // jω axis in maize
+  ctx.font='10px ui-monospace,monospace';                                // labels flank the jω axis, clear of the Im-axis title
+  const sL='stable  σ<0', sR='unstable  σ>0', wL=ctx.measureText(sL).width;
+  ctx.fillStyle='rgba(91,214,160,.55)';  ctx.fillText(sL, clamp(zc-8-wL, x0+70, x1-6), PAD.t+16);
+  ctx.fillStyle='rgba(255,107,107,.55)'; ctx.fillText(sR, clamp(zc+8, x0+6, x1-ctx.measureText(sR).width-6), PAD.t+16);
+  // radial spokes (origin → pole) visualise the damping angle
+  radial(ctx,A,sigma,omega,.30);
+  if(conj) radial(ctx,A,sigma,-omega,.16);
+  // markers
+  if(conj) marker(ctx,A,sigma,-omega,'#FFCB05',false);
+  marker(ctx,A,sigma,omega,'#57C7FF',true);
+}
+function radial(ctx,A,re,im,alpha){
+  const [ox,oy]=D2P(0,0,A), [mx,my]=D2P(re,im,A);
+  ctx.save(); ctx.beginPath(); ctx.rect(PAD.l,PAD.t,A.M.W,A.M.H); ctx.clip();
+  ctx.setLineDash([4,4]); ctx.strokeStyle=`rgba(255,203,5,${alpha})`; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(ox,oy); ctx.lineTo(mx,my); ctx.stroke();
+  ctx.setLineDash([]); ctx.restore();
+}
+function marker(ctx,A,re,im,color,primary){
+  const [px,py]=D2P(re,im,A); const R=primary?6.5:5;
+  ctx.save();
+  ctx.shadowColor=color; ctx.shadowBlur=primary?14:8;
+  ctx.fillStyle=color; ctx.globalAlpha=primary?1:.85; ctx.beginPath(); ctx.arc(px,py,R,0,7); ctx.fill();
+  ctx.shadowBlur=0; ctx.globalAlpha=1; ctx.lineWidth=2; ctx.strokeStyle='#fff';
+  ctx.beginPath(); ctx.arc(px,py,R,0,7); ctx.stroke();
+  ctx.restore();
+}
+
+/* ================================================================
+   4. RENDER — the e^{st} plane (right): static layer is cached to an
+      offscreen canvas; only the sweeping comet redraws each frame.
+   ================================================================ */
+const estCache=document.createElement('canvas'); let estDpr=1;
+const DIM1='#123f66',  BR1='#8fe1ff';                   // primary spiral gradient (dim → bright)
+const DIM2='#5c4a14',  BR2='#ffdd55';                   // conjugate spiral gradient
+function renderEstStatic(){
+  const cv=el('est'); const dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight;
+  cv.width=w*dpr; cv.height=h*dpr; estCache.width=w*dpr; estCache.height=h*dpr; estDpr=dpr;
+  const ctx=estCache.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
+  const A=actual(cv,viewR); const M=A.M;
+  drawGrid(ctx,A,'Re','Im',{});
+  // faint unit circle: |e^{st}| = 1 is where marginal modes live and every trajectory begins
+  const [cx,cy]=D2P(0,0,A);
+  ctx.save(); ctx.beginPath(); ctx.rect(PAD.l,PAD.t,M.W,M.H); ctx.clip();
+  ctx.setLineDash([3,4]); ctx.strokeStyle='rgba(138,166,198,.30)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.arc(cx,cy,A.s,0,7); ctx.stroke(); ctx.setLineDash([]);
+  ctx.restore();
+  if(traj && !traj.constant){
+    if(conj) spiral(ctx,A,traj.mirror,DIM2,BR2,.85);
+    spiral(ctx,A,traj.pts,DIM1,BR1,1);
+    const af = sigma>1e-9 ? 0.9 : 0.12;                  // arrow on the largest visible loop (late if growing, early if decaying)
+    if(conj) arrowAt(ctx,A,traj.mirror,af,BR2);
+    arrowAt(ctx,A,traj.pts,af,BR1);
+  }
+  // t = 0 start point, always at 1 + 0j
+  const [sx,sy]=D2P(1,0,A);
+  ctx.save(); ctx.beginPath(); ctx.rect(PAD.l,PAD.t,M.W,M.H); ctx.clip();
+  ctx.strokeStyle='#EAF1FB'; ctx.lineWidth=1.6; ctx.beginPath(); ctx.arc(sx,sy,4.5,0,7); ctx.stroke();
+  ctx.fillStyle='rgba(234,241,251,.85)'; ctx.font='10px ui-monospace,monospace'; ctx.fillText('t = 0',sx+8,sy-6);
+  ctx.restore();
+}
+function spiral(ctx,A,pts,dim,bright,alpha){
+  if(!pts||pts.length<2) return;
+  const M=A.M;
+  ctx.save(); ctx.beginPath(); ctx.rect(PAD.l,PAD.t,M.W,M.H); ctx.clip();
+  ctx.lineWidth=2; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.globalAlpha=alpha;
+  for(let i=1;i<pts.length;i++){
+    const a=pts[i-1], b=pts[i];
+    if(!isFinite(a.re)||!isFinite(b.re)) continue;
+    ctx.strokeStyle=lerpHex(dim,bright,i/(pts.length-1));
+    const [x0,y0]=D2P(a.re,a.im,A), [x1,y1]=D2P(b.re,b.im,A);
+    ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+  }
+  ctx.globalAlpha=1; ctx.restore();
+}
+function arrowAt(ctx,A,pts,frac,color){
+  const i=clamp(Math.round(frac*(pts.length-1)),1,pts.length-1), a=pts[i-1], b=pts[i];
+  if(!isFinite(a.re)||!isFinite(b.re)) return;
+  const [x0,y0]=D2P(a.re,a.im,A), [x1,y1]=D2P(b.re,b.im,A);
+  if(x1<PAD.l||x1>PAD.l+A.M.W||y1<PAD.t||y1>PAD.t+A.M.H) return;
+  const ang=Math.atan2(y1-y0,x1-x0), hl=8;
+  ctx.save(); ctx.strokeStyle=color; ctx.lineWidth=2; ctx.lineCap='round';
+  ctx.beginPath();
+  ctx.moveTo(x1,y1); ctx.lineTo(x1-hl*Math.cos(ang-0.42),y1-hl*Math.sin(ang-0.42));
+  ctx.moveTo(x1,y1); ctx.lineTo(x1-hl*Math.cos(ang+0.42),y1-hl*Math.sin(ang+0.42));
+  ctx.stroke(); ctx.restore();
+}
+function renderEstFrame(){
+  const cv=el('est'); const ctx=cv.getContext('2d');
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
+  if(estCache.width) ctx.drawImage(estCache,0,0);
+  const dpr=estDpr||1; ctx.setTransform(dpr,0,0,dpr,0,0);
+  if(!traj||traj.constant) return;
+  const A=actual(cv,viewR);
+  if(conj) comet(ctx,A,traj.mirror,BR2);
+  comet(ctx,A,traj.pts,BR1);
+}
+function comet(ctx,A,pts,glow){
+  const n=pts.length; if(n<2) return;
+  const i=clamp(Math.floor(cometU*(n-1)),0,n-1), p=pts[i];
+  if(!isFinite(p.re)) return;
+  const [px,py]=D2P(p.re,p.im,A);
+  ctx.save(); ctx.beginPath(); ctx.rect(PAD.l,PAD.t,A.M.W,A.M.H); ctx.clip(); ctx.lineCap='round';
+  for(let k=1;k<=10 && i-k>=0;k++){                     // short trailing tail = direction of travel
+    const q0=pts[i-k+1], q1=pts[i-k]; if(!isFinite(q1.re)) break;
+    const [ax,ay]=D2P(q0.re,q0.im,A), [bx,by]=D2P(q1.re,q1.im,A);
+    ctx.strokeStyle=glow; ctx.globalAlpha=(1-k/11)*0.8; ctx.lineWidth=2.4;
+    ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+  ctx.shadowColor=glow; ctx.shadowBlur=12; ctx.fillStyle='#fff';
+  ctx.beginPath(); ctx.arc(px,py,4,0,7); ctx.fill();
+  ctx.shadowBlur=0; ctx.strokeStyle=glow; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(px,py,4,0,7); ctx.stroke();
+  ctx.restore();
+}
+
+/* ================================================================
+   5. RENDER — Re & Im of e^{st} vs t (percentile-clipped y-range so
+      a growing mode doesn't crush the early behaviour off the chart)
+   ================================================================ */
+function renderTime(){
+  const cv=el('tstrip'); const {ctx,w,h}=fitDPR(cv);
+  const pL=46,pR=14,pT=12,pB=24, W=w-pL-pR, H=h-pT-pB;
+  ctx.clearRect(0,0,w,h);
+  let pts = traj?traj.pts:[{t:0,re:1,im:0}];
+  if(pts.length<2) pts=[{t:0,re:1,im:0},{t:1,re:1,im:0}];
+  const Tend=Math.max(pts[pts.length-1].t,1e-3);
+  // y-range: 2nd/98th percentile, but cap to a few × the early spread if the tail diverges
+  const vals=[],early=[]; const k=Math.max(3,Math.ceil(0.12*pts.length));
+  for(let i=0;i<pts.length;i++){ const p=pts[i];
+    if(isFinite(p.re)){vals.push(p.re); if(i<k) early.push(p.re);}
+    if(isFinite(p.im)){vals.push(p.im); if(i<k) early.push(p.im);} }
+  vals.sort((a,b)=>a-b);
+  const q=f=>vals[clamp(Math.floor(f*(vals.length-1)),0,vals.length-1)];
+  let lo=Math.min(0,q(0.02)), hi=Math.max(0,q(0.98));
+  let em=0; for(const v of early) em=Math.max(em,Math.abs(v));
+  if(em>0){ const cap=2.6*em; hi=Math.min(hi,cap); lo=Math.max(lo,-cap); }
+  if(hi-lo<1e-9){ lo-=1; hi+=1; }
+  const m=(hi-lo)*0.1; lo-=m; hi+=m;
+  const X=tt=>pL+(tt/Tend)*W, Y=v=>pT+(1-(v-lo)/(hi-lo))*H;
+  ctx.font='10px ui-monospace,monospace';
+  const sy=niceStep(hi-lo,5);
+  for(let y=Math.ceil(lo/sy)*sy;y<=hi;y+=sy){ const yy=Y(y);
+    ctx.strokeStyle=Math.abs(y)<1e-9?'rgba(138,166,198,.4)':'rgba(138,166,198,.12)';
+    ctx.lineWidth=1; ctx.beginPath();ctx.moveTo(pL,yy);ctx.lineTo(pL+W,yy);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)';ctx.fillText(fmtTick(y),4,yy+3); }
+  const sx=niceStep(Tend,6);
+  for(let x=0;x<=Tend+1e-9;x+=sx){ const xx=X(x);
+    ctx.strokeStyle='rgba(138,166,198,.12)';ctx.beginPath();ctx.moveTo(xx,pT);ctx.lineTo(xx,pT+H);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)';ctx.fillText(fmtTick(x),xx+2,pT+H+15); }
+  ctx.fillStyle='rgba(138,166,198,.8)';ctx.fillText('t (s)',pL+W-30,pT+H+15);
+  ctx.save(); ctx.beginPath(); ctx.rect(pL,pT,W,H); ctx.clip();
+  tline(ctx,pts,'im',X,Y,'#FFCB05'); tline(ctx,pts,'re',X,Y,'#57C7FF');
+  ctx.restore();
+}
+function tline(ctx,pts,key,X,Y,color){
+  ctx.strokeStyle=color; ctx.lineWidth=1.8; ctx.lineJoin='round'; ctx.beginPath();
+  let pen=false;
+  for(let i=0;i<pts.length;i++){ const v=pts[i][key];
+    if(!isFinite(v)||!isFinite(pts[i].t)){pen=false;continue;}
+    const x=X(pts[i].t),y=Y(v); pen?ctx.lineTo(x,y):ctx.moveTo(x,y); pen=true; }
+  ctx.stroke();
+}
+
+/* ================================================================
+   6. READOUTS + ANALYSIS
+   ================================================================ */
+function updateReadouts(){
+  const wn=Math.hypot(sigma,omega), c=classify(sigma,omega);
+  el('roS').textContent=fmtC(sigma,omega);
+  el('roWn').textContent=fmt(wn);
+  el('roZ').textContent = wn>1e-9?fmt(-sigma/wn):'—';
+  el('roMode').textContent=c.short;
+  el('roMode').style.color = c.stab==='stable'?'var(--good)':c.stab==='unstable'?'var(--bad)':'var(--maize)';
+  // analysis panel
+  const aw=Math.abs(omega), asig=Math.abs(sigma);
+  el('anMag').textContent = asig<1e-9 ? 'σ = 0 → magnitude ≡ 1 (no growth/decay)'
+    : `σ = ${fmt(sigma)} → τ = 1/|σ| = ${fmt(1/asig)} s (${sigma<0?'decay':'growth'})`;
+  el('anRot').textContent = aw<1e-9 ? 'ω = 0 → no rotation (real axis)'
+    : `ω = ${fmt(omega)} rad/s → period ${fmt(2*Math.PI/aw)} s, ${omega>0?'CCW ↺':'CW ↻'}`;
+  if(aw<1e-9 || asig<1e-9 && aw<1e-9){ el('anRev').textContent='—'; }
+  else if(aw<1e-9){ el('anRev').textContent='—'; }
+  else { const f=Math.exp(2*Math.PI*sigma/aw);
+    el('anRev').textContent = `amplitude × ${f.toPrecision(3)} each loop (${f<1?'shrinks':f>1?'grows':'holds'})`; }
+  const v=el('anVerdict'); v.textContent=c.text; v.className='val big '+c.stab;
+}
+
+/* ================================================================
+   7. REGENERATE + DRAW
+   ================================================================ */
+function regenTraj(){ traj=genTraj(sigma,omega,actual(el('est'),viewR)); }
+function refreshRight(){ regenTraj(); renderEstStatic(); renderTime(); }
+function refreshAll(){ updateReadouts(); renderSPlane(); refreshRight(); }
+function setPole(sig,om){ sigma=sig; omega=om; syncPoleFields(); refreshAll(); }
+
+/* ================================================================
+   8. INTERACTION
+   ================================================================ */
+function clampView(v){
+  if(v.x1max-v.x1min<1e-3){const c=(v.x1min+v.x1max)/2;v.x1min=c-5e-4;v.x1max=c+5e-4;}
+  if(v.x2max-v.x2min<1e-3){const c=(v.x2min+v.x2max)/2;v.x2min=c-5e-4;v.x2max=c+5e-4;}
+}
+// --- left s-plane: grab the marker to move s, drag the background to pan, wheel to zoom ---
+(function(){
+  const cv=el('splane'); let down=null;
+  cv.addEventListener('mousedown',e=>{
+    const r=cv.getBoundingClientRect(), x=e.clientX-r.left, y=e.clientY-r.top;
+    const A=actual(cv,viewL), [mx,my]=D2P(sigma,omega,A);
+    down={x,y,lx:x,ly:y,moved:false,mode:Math.hypot(x-mx,y-my)<13?'marker':'pan'};
+  });
+  window.addEventListener('mousemove',e=>{
+    if(!down) return;
+    const r=cv.getBoundingClientRect(), x=e.clientX-r.left, y=e.clientY-r.top, A=actual(cv,viewL);
+    if(Math.hypot(x-down.x,y-down.y)>4) down.moved=true;
+    if(down.mode==='marker'){ const [a,b]=P2D(x,y,A); setPole(a,b); }
+    else if(down.moved){
+      const dx=x-down.lx, dy=y-down.ly, rx=viewL.x1max-viewL.x1min, ry=viewL.x2max-viewL.x2min;
+      viewL.x1min-=dx/A.M.W*rx; viewL.x1max-=dx/A.M.W*rx;
+      viewL.x2min+=dy/A.M.H*ry; viewL.x2max+=dy/A.M.H*ry;
+      down.lx=x; down.ly=y; syncAxisFields(); renderSPlane();
+    }
+  });
+  window.addEventListener('mouseup',()=>{
+    if(down && !down.moved && down.mode==='pan'){       // a plain click on empty space = move the pole there
+      const A=actual(cv,viewL), [a,b]=P2D(down.x,down.y,A); setPole(a,b);
+    }
+    down=null;
+  });
+  cv.addEventListener('wheel',e=>{
+    e.preventDefault();
+    const r=cv.getBoundingClientRect(), A=actual(cv,viewL), [dx,dy]=P2D(e.clientX-r.left,e.clientY-r.top,A);
+    const f=e.deltaY>0?1.1:1/1.1;
+    viewL.x1min=dx-(dx-viewL.x1min)*f; viewL.x1max=dx+(viewL.x1max-dx)*f;
+    viewL.x2min=dy-(dy-viewL.x2min)*f; viewL.x2max=dy+(viewL.x2max-dy)*f;
+    clampView(viewL); syncAxisFields(); renderSPlane();
+  },{passive:false});
+})();
+// --- right e^{st} plane: drag = pan, wheel = zoom (governs how much of the mode you see) ---
+(function(){
+  const cv=el('est'); let down=null;
+  cv.addEventListener('mousedown',e=>{ const r=cv.getBoundingClientRect();
+    down={lx:e.clientX-r.left,ly:e.clientY-r.top,moved:false}; });
+  window.addEventListener('mousemove',e=>{
+    if(!down) return;
+    const r=cv.getBoundingClientRect(), x=e.clientX-r.left, y=e.clientY-r.top, A=actual(cv,viewR);
+    const dx=x-down.lx, dy=y-down.ly; if(Math.hypot(dx,dy)>2) down.moved=true;
+    const rx=viewR.x1max-viewR.x1min, ry=viewR.x2max-viewR.x2min;
+    viewR.x1min-=dx/A.M.W*rx; viewR.x1max-=dx/A.M.W*rx;
+    viewR.x2min+=dy/A.M.H*ry; viewR.x2max+=dy/A.M.H*ry;
+    down.lx=x; down.ly=y; syncAxisFields(); refreshRight();
+  });
+  window.addEventListener('mouseup',()=>{ down=null; });
+  cv.addEventListener('wheel',e=>{
+    e.preventDefault();
+    const r=cv.getBoundingClientRect(), A=actual(cv,viewR), [dx,dy]=P2D(e.clientX-r.left,e.clientY-r.top,A);
+    const f=e.deltaY>0?1.1:1/1.1;
+    viewR.x1min=dx-(dx-viewR.x1min)*f; viewR.x1max=dx+(viewR.x1max-dx)*f;
+    viewR.x2min=dy-(dy-viewR.x2min)*f; viewR.x2max=dy+(viewR.x2max-dy)*f;
+    clampView(viewR); syncAxisFields(); refreshRight();
+  },{passive:false});
+})();
+
+// --- field <-> state sync ---
+function syncPoleFields(){ el('sig').value=+sigma.toFixed(4); el('om').value=+omega.toFixed(4); }
+function syncAxisFields(){
+  el('lRe0').value=+viewL.x1min.toFixed(3); el('lRe1').value=+viewL.x1max.toFixed(3);
+  el('lIm0').value=+viewL.x2min.toFixed(3); el('lIm1').value=+viewL.x2max.toFixed(3);
+  el('rRe0').value=+viewR.x1min.toFixed(3); el('rRe1').value=+viewR.x1max.toFixed(3);
+  el('rIm0').value=+viewR.x2min.toFixed(3); el('rIm1').value=+viewR.x2max.toFixed(3);
+}
+['sig','om'].forEach(id=>el(id).addEventListener('change',()=>{
+  const a=parseFloat(el('sig').value), b=parseFloat(el('om').value);
+  if(isFinite(a)&&isFinite(b)) setPole(a,b);
+}));
+function axisHandler(ids,v,after){ ids.forEach(id=>el(id).addEventListener('change',()=>{
+  const a=parseFloat(el(ids[0]).value),b=parseFloat(el(ids[1]).value),c=parseFloat(el(ids[2]).value),d=parseFloat(el(ids[3]).value);
+  if(isFinite(a)&&isFinite(b)&&b>a){v.x1min=a;v.x1max=b;}
+  if(isFinite(c)&&isFinite(d)&&d>c){v.x2min=c;v.x2max=d;}
+  after();
+})); }
+axisHandler(['lRe0','lRe1','lIm0','lIm1'],viewL,()=>renderSPlane());
+axisHandler(['rRe0','rRe1','rIm0','rIm1'],viewR,()=>refreshRight());
+
+// --- conjugate toggle, fit, reset ---
+function setConj(on){ conj=on; el('cjOn').classList.toggle('on',on); el('cjOff').classList.toggle('on',!on);
+  renderSPlane(); renderEstStatic(); }
+el('cjOn').onclick=()=>setConj(true); el('cjOff').onclick=()=>setConj(false);
+el('fit').onclick=()=>{
+  const aw=Math.abs(omega), asig=Math.abs(sigma); let R;
+  if(asig<1e-9&&aw<1e-9) R=1.4;
+  else if(sigma<=1e-12) R=1.3;                          // decaying / marginal → the unit disk
+  else { const t=aw>1e-9?1.5*2*Math.PI/aw:3/asig; R=Math.max(1.3,Math.exp(sigma*t)*1.1); }
+  viewR.x1min=-R;viewR.x1max=R;viewR.x2min=-R;viewR.x2max=R; syncAxisFields(); refreshRight();
+};
+el('reset').onclick=()=>{ Object.assign(viewL,viewL0); Object.assign(viewR,viewR0); syncAxisFields(); refreshAll(); };
+
+/* ================================================================
+   9. ANIMATION LOOP (only the comet moves)
+   ================================================================ */
+let lastWall=0;
+function loop(now){
+  if(!lastWall) lastWall=now;
+  const dt=Math.min(0.05,(now-lastWall)/1000); lastWall=now;
+  cometU+=dt/SWEEP; if(cometU>=1) cometU-=1;
+  renderEstFrame();
+  requestAnimationFrame(loop);
+}
+
+/* ================================================================
+   10. BOOT
+   ================================================================ */
+let rz=null;
+window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ renderSPlane(); refreshRight(); },80); });
+syncPoleFields(); syncAxisFields(); refreshAll();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

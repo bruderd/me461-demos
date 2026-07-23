@@ -67,6 +67,9 @@ teaching artifact. The reference implementation is `demos/cruise-control/index.h
       vector field, drop ICs, watch trajectories in phase space and in time.
 - [x] Linearization Explorer (`demos/linearization/`) — nonlinear system vs. your
       linearization of it, side by side. (See "Session resume notes" below.)
+- [x] Complex Exponential Explorer (`demos/complex-exponential/`) — place a pole s = σ+jω
+      in the s-plane, watch the mode e^{st} spiral (decay / sustain / grow) live like a 2-D
+      slider; Re/Im-vs-t strip, ζ & ωₙ readouts, conjugate-pair toggle.
 - [ ] DC motor (position/speed control; V→current→torque).
 - [ ] Inverted pendulum / cart-pole (stabilization; nonlinear, great for state feedback).
 - [ ] Ball & beam.
