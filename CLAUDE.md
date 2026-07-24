@@ -109,7 +109,7 @@ Keep all of them on the same skeleton so students recognize the interface across
 
 ---
 
-## Session resume notes (last updated 2026-07-23)
+## Session resume notes (last updated 2026-07-24)
 
 Where we left off, so the conversation can be cleared and resumed later.
 
