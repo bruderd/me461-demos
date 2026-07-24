@@ -137,11 +137,14 @@ Where we left off, so the conversation can be cleared and resumed later.
 
 **What it is.** Top = editable `f(t)` box (+ EXACT/NUMERIC pill, live f(0), duration T, Rebuild).
 **Layout** (revised per user): full-width **f(t) time plot** w/ scrubber on top; then a `.lgrid`
-(2fr/1fr) with the star — a **hand-rolled 3-D |F(s)| surface** (2/3, left) over s=σ+jω (height=|F|,
+(**`1.3fr 1fr`** → right column ≈43.5%, widened per user from an earlier 2fr/1fr; kept <50%) with the
+star — a **hand-rolled 3-D |F(s)| surface** (left) over s=σ+jω (height=|F|,
 color=∠F via cyclic hue = "domain coloring"), draggable floor cursor + vertical line, tilt(drag)/
-pan(shift-drag)/zoom(wheel), pole spikes (×), ROC tint on floor — beside a `.rcol` (right 1/3) that
+pan(shift-drag)/zoom(wheel), pole spikes (×), ROC tint on floor — beside a `.rcol` (right) that
 **stacks** the 2-D **s-plane** inspector (top; draggable cursor, **dual manual s entry — rectangular
-`s = a + bj` AND polar `= r·e^(θ j)`, kept in sync both ways via `syncCursorFields`**, its own **Reset
+`s = a + bj` AND polar `= r·e^(θ j)`, kept in sync both ways via `syncCursorFields`**; those four
+cursor inputs carry class `.nospin` = `appearance:textfield` + hidden webkit spin buttons so the
+up/down steppers don't clutter them; its own **Reset
 view** button `#resetViewS`, pole ×'s, ROC shading/boundary) over the **F(s) value plane** (bottom).
 Grid stretch makes the two right cards' combined height equal the surface's. Full-width **poles & ROC**
 box at the bottom. (The old redundant `s (rect)`/`s (polar)` readout tiles were removed since the manual
