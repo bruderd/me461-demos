@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MECHENG 461 · Laplace Transform F(s)</title>
+<style>
+  /* ---- Instrument-cluster aesthetic: navy panel, maize accent, mono telemetry ---- */
+  :root{
+    --navy:#00274C; --navy-2:#0A1B33; --panel:#102A4C;
+    --maize:#FFCB05; --cyan:#57C7FF; --ink:#EAF1FB; --muted:#8AA6C6;
+    --grid:rgba(138,166,198,.16); --good:#5BD6A0; --bad:#FF6B6B;
+    --re:#57C7FF; --im:#FFCB05;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--navy-2)}
+  body{background:linear-gradient(180deg,#0B1A30,#08111F 60%);color:var(--ink);font-family:var(--sans);
+       -webkit-font-smoothing:antialiased;padding:22px;min-height:100vh}
+  .wrap{max-width:1180px;margin:0 auto}
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:4px}
+  header .tag{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--maize);
+              border:1px solid rgba(255,203,5,.35);padding:3px 8px;border-radius:4px}
+  h1{font-size:20px;font-weight:650;margin:0;letter-spacing:.01em}
+  header .sub{color:var(--muted);font-size:13px}
+  .card{background:linear-gradient(180deg,var(--panel),#0C2140);border:1px solid rgba(138,166,198,.16);
+        border-radius:12px;padding:14px;margin-top:16px}
+  .card h2{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+           color:var(--muted);margin:0 0 10px;font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .card h2 .note{font-family:var(--sans);letter-spacing:0;text-transform:none;font-size:11px;color:var(--muted);font-weight:400}
+  .card h2 .m{text-transform:none;letter-spacing:.02em;font-size:12px}
+  canvas{display:block;width:100%;border-radius:8px}
+
+  input[type=text],input[type=number]{background:#08182f;color:#cfe3ff;border:1px solid rgba(138,166,198,.2);
+    border-radius:8px;padding:8px 9px;font-family:var(--mono);font-size:14px;width:100%}
+  input[type=text]:focus,input[type=number]:focus{outline:none;border-color:rgba(255,203,5,.6)}
+  input.bad{border-color:var(--bad)!important;background:#2a1416}
+  code{font-family:var(--mono);background:#0a1d38;padding:1px 5px;border-radius:4px;font-size:12px}
+
+  /* ---- top f(t) input ---- */
+  .fbar{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap}
+  .fbar .grow{flex:1 1 340px;min-width:260px}
+  .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-bottom:5px;display:block}
+  .lbl .lc{text-transform:none}
+  .pill{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.06em;padding:5px 10px;border-radius:999px;
+        border:1px solid rgba(138,166,198,.3);white-space:nowrap}
+  .pill.exact{color:#08213f;background:var(--good);border-color:transparent}
+  .pill.numeric{color:#08213f;background:var(--maize);border-color:transparent}
+  .pill.err{color:#fff;background:var(--bad);border-color:transparent}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  .field.small input{width:78px}
+  .hint{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .hint code{font-size:11px}
+
+  button{font-family:var(--sans);font-size:13px;font-weight:600;border:1px solid rgba(138,166,198,.25);
+    background:#122f52;color:var(--ink);padding:9px 15px;border-radius:8px;cursor:pointer;transition:.12s}
+  button:hover{background:#173a66}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.mini{padding:6px 10px;font-size:12px}
+  .btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  .tcanvas{background:linear-gradient(180deg,#0d2a52,#0a1830);height:230px;cursor:crosshair;touch-action:none}
+  #surf{background:radial-gradient(120% 120% at 50% 40%,#0d2740,#080f1c);height:430px;cursor:grab;touch-action:none}
+  #surf:active{cursor:grabbing}
+  #splane{background:radial-gradient(120% 120% at 50% 45%,#0d2a52,#0a1830);height:300px;cursor:crosshair;touch-action:none}
+  #ring{background:radial-gradient(120% 120% at 50% 50%,#0d2740,#0a1526);height:300px;touch-action:none}
+
+  .axisrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 9px;min-height:30px}
+  .axisrow .grp{display:flex;align-items:center;gap:4px}
+  .axisrow .al{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .axisrow input{width:54px;padding:5px 6px;font-size:12px}
+
+  .status{font-size:12px;color:var(--muted);min-height:15px;margin-top:8px}
+  .status.warn{color:var(--maize)}
+
+  /* ---- numeric readout tiles ---- */
+  .ros{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .ro{background:#0A1D38;border:1px solid rgba(138,166,198,.14);border-radius:8px;padding:6px 10px;min-width:0}
+  .ro .k{font-family:var(--mono);font-size:9px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+  .ro .v{font-family:var(--mono);font-size:14px;font-weight:600;margin-top:2px}
+  .swatch{width:13px;height:13px;border-radius:3px;display:inline-block;vertical-align:-2px;margin-right:5px;border:1px solid rgba(255,255,255,.25)}
+
+  /* ---- poles / ROC box ---- */
+  .prow{display:grid;grid-template-columns:120px 1fr;gap:8px 14px;font-size:13px;align-items:baseline}
+  .prow .pk{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;padding-top:2px}
+  .prow .pv{font-family:var(--mono);font-size:13px;color:var(--ink);line-height:1.6}
+  .pv .x{color:var(--bad);font-weight:700}
+
+  footer{color:var(--muted);font-size:12px;margin-top:16px;line-height:1.6}
+  footer b{color:var(--ink);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="tag">MECHENG&nbsp;461</span>
+    <h1>Laplace Transform Explorer</h1>
+    <span class="sub">type a signal f(t), see its transform F(s) as a surface over the complex plane</span>
+  </header>
+
+  <!-- ============ f(t) INPUT ============ -->
+  <div class="card">
+    <h2>the signal <span class="m">f(t)</span>, for t ≥ 0 <span class="note">Laplace transform F(s) = ∫₀<sup>∞</sup> f(t) e<sup>−st</sup> dt</span></h2>
+    <div class="fbar">
+      <div class="grow">
+        <label class="lbl" for="expr">f(t) =</label>
+        <input id="expr" type="text" spellcheck="false" value="e^(-0.5t)*cos(3t)">
+      </div>
+      <div class="field"><span class="k">mode</span><span id="modePill" class="pill exact">EXACT</span></div>
+      <div class="field"><span class="k"><span class="lc">f(0)</span> =</span><div class="pill" id="f0" style="background:#0a1d38;color:var(--ink)">—</div></div>
+      <div class="field small"><span class="k">duration T</span><input id="T" type="number" step="any" value="6"></div>
+      <div class="btns"><button id="run">Rebuild</button></div>
+    </div>
+    <div class="hint" id="hint">
+      Build from <code>t</code>, <code>e</code>, <code>pi</code>, <code>j</code> and <code>+ − * / ^</code> with
+      <code>exp sin cos sinh cosh</code> (poly×exp×sinusoid → <b>exact</b> F(s) with true poles &amp; ROC).
+      Anything else (<code>tan sqrt log abs</code>, <code>1/(t+1)</code>, …) falls back to <b>numeric</b> integration.
+    </div>
+  </div>
+
+  <!-- ============ TIME DOMAIN + SURFACE ============ -->
+  <div class="grid">
+    <!-- LEFT: f(t) -->
+    <div class="card">
+      <h2><span class="m">f(t)</span> · time domain <span class="note">drag the plot to scrub</span></h2>
+      <canvas id="tstrip" class="tcanvas"></canvas>
+      <div class="ros">
+        <div class="ro"><div class="k">t</div><div class="v" id="roT">—</div></div>
+        <div class="ro"><div class="k">f(t)</div><div class="v" id="roFt">—</div></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: |F(s)| surface -->
+    <div class="card">
+      <h2><span class="m">|F(s)|</span> surface over s = σ + jω
+          <span class="note">drag = tilt · shift-drag = pan · wheel = zoom · drag cursor on floor = move s</span></h2>
+      <div class="axisrow">
+        <span class="grp"><span class="al">σ</span><input id="sMin" type="number" step="any" value="-3"><input id="sMax" type="number" step="any" value="2"></span>
+        <span class="grp"><span class="al">ω</span><input id="wMin" type="number" step="any" value="-6"><input id="wMax" type="number" step="any" value="6"></span>
+        <button id="resetView" class="mini">Reset view</button>
+      </div>
+      <canvas id="surf"></canvas>
+      <div class="status" id="surfStatus">height = |F(s)| · color = ∠F(s) · vertical line marks the cursor s.</div>
+    </div>
+  </div>
+
+  <!-- ============ INSPECTOR: s-plane + F(s) value/phase ============ -->
+  <div class="grid">
+    <!-- s-plane -->
+    <div class="card">
+      <h2>s-plane <span class="note">drag the cursor · scroll = zoom · drag background = pan</span></h2>
+      <div class="axisrow">
+        <span class="grp"><span class="al">Re s</span><input id="pRe0" type="number" step="any"><input id="pRe1" type="number" step="any"></span>
+        <span class="grp"><span class="al">Im s</span><input id="pIm0" type="number" step="any"><input id="pIm1" type="number" step="any"></span>
+      </div>
+      <canvas id="splane"></canvas>
+      <div class="ros">
+        <div class="ro"><div class="k">s (rect)</div><div class="v" id="roSrect">—</div></div>
+        <div class="ro"><div class="k">s (polar)</div><div class="v" id="roSpol">—</div></div>
+      </div>
+    </div>
+
+    <!-- F(s) value + phase key -->
+    <div class="card">
+      <h2><span class="m">F(s)</span> · value &amp; phase key <span class="note">ring = ∠F color key · dot = F(s) (|F| radially compressed)</span></h2>
+      <canvas id="ring"></canvas>
+      <div class="ros">
+        <div class="ro"><div class="k">F(s) (rect)</div><div class="v"><span class="swatch" id="fSwatch"></span><span id="roFrect">—</span></div></div>
+        <div class="ro"><div class="k">F(s) (polar)</div><div class="v" id="roFpol">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ POLES / ROC ============ -->
+  <div class="card">
+    <h2>poles &amp; region of convergence</h2>
+    <div class="prow">
+      <div class="pk">F(s)</div><div class="pv" id="pvFs">—</div>
+      <div class="pk">poles</div><div class="pv" id="pvPoles">—</div>
+      <div class="pk">ROC</div><div class="pv" id="pvRoc">—</div>
+    </div>
+  </div>
+
+  <footer>
+    <b>How it works.</b>&nbsp; The Laplace transform F(s) = ∫₀<sup>∞</sup> f(t) e<sup>−st</sup> dt turns a time signal into a
+    complex-valued function of the complex frequency s = σ + jω. The surface plots <b>|F(s)|</b> as height and <b>∠F(s)</b>
+    as color (the ring on the right is the color key). Where f(t) is a sum of terms of the form
+    <em>t<sup>n</sup>e<sup>at</sup>·{sin,cos}(ωt)</em>, F(s) is a rational function computed <b>exactly</b> — its
+    <em>poles</em> are the spikes where |F| → ∞, and its <b>region of convergence</b> is the half-plane to the right of the
+    rightmost pole, Re(s) &gt; σ<sub>a</sub> (shaded on the floor and in the s-plane). For any other f(t) the integral is
+    evaluated <b>numerically</b> over [0, T]; it only converges to the right of the abscissa of convergence, so the surface
+    there is a truncated approximation. Move the floor cursor (or drag in the s-plane) to read s and F(s) in rectangular and
+    polar form. Nothing runs on a server.
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ================================================================
+   0. COMPLEX ARITHMETIC  (complex numbers are [re, im])
+   ================================================================ */
+const C=(re,im)=>[re,im||0];
+const cadd=(a,b)=>[a[0]+b[0],a[1]+b[1]];
+const csub=(a,b)=>[a[0]-b[0],a[1]-b[1]];
+const cmul=(a,b)=>[a[0]*b[0]-a[1]*b[1], a[0]*b[1]+a[1]*b[0]];
+const cscale=(a,k)=>[a[0]*k,a[1]*k];              // k real
+const cscaleC=(a,k)=>cmul(a,k);                   // k complex
+function cdiv(a,b){const d=b[0]*b[0]+b[1]*b[1];return [(a[0]*b[0]+a[1]*b[1])/d,(a[1]*b[0]-a[0]*b[1])/d];}
+const cabs=a=>Math.hypot(a[0],a[1]);
+const carg=a=>Math.atan2(a[1],a[0]);
+function cexp(a){const e=Math.exp(a[0]);return [e*Math.cos(a[1]),e*Math.sin(a[1])];}
+function clog(a){return [Math.log(Math.hypot(a[0],a[1])), Math.atan2(a[1],a[0])];}
+function cpow(a,b){                                 // principal branch, integer fast-path
+  if(Math.abs(b[1])<1e-14 && Math.abs(b[0]-Math.round(b[0]))<1e-12){
+    let k=Math.round(b[0]); if(k===0) return [1,0];
+    let base=(k<0)?cdiv([1,0],a):a, r=[1,0]; k=Math.abs(k);
+    for(let i=0;i<k;i++) r=cmul(r,base); return r;
+  }
+  if(a[0]===0&&a[1]===0) return (b[0]>0)?[0,0]:[NaN,NaN];
+  return cexp(cmul(b,clog(a)));
+}
+function csin(a){return [Math.sin(a[0])*Math.cosh(a[1]), Math.cos(a[0])*Math.sinh(a[1])];}
+function ccos(a){return [Math.cos(a[0])*Math.cosh(a[1]), -Math.sin(a[0])*Math.sinh(a[1])];}
+function csinh(a){return [Math.sinh(a[0])*Math.cos(a[1]), Math.cosh(a[0])*Math.sin(a[1])];}
+function ccosh(a){return [Math.cosh(a[0])*Math.cos(a[1]), Math.sinh(a[0])*Math.sin(a[1])];}
+const ctan=a=>cdiv(csin(a),ccos(a));
+const ctanh=a=>cdiv(csinh(a),ccosh(a));
+function csqrt(a){const r=Math.hypot(a[0],a[1]),re=Math.sqrt((r+a[0])/2);let im=Math.sqrt((r-a[0])/2);if(a[1]<0)im=-im;return [re,im];}
+
+/* ================================================================
+   1. PARSER  —  f(t) expression → AST
+   node types: num, var, neg, add, sub, mul, div, pow, call
+   ================================================================ */
+const FUNCS={exp:1,sin:1,cos:1,tan:1,sinh:1,cosh:1,tanh:1,sqrt:1,log:1,ln:1,abs:1};
+function tokenize(str){
+  const toks=[]; let i=0; const s=str;
+  const isd=c=>c>='0'&&c<='9', isa=c=>(c>='a'&&c<='z')||(c>='A'&&c<='Z');
+  while(i<s.length){
+    const c=s[i];
+    if(c===' '||c==='\t'){i++;continue;}
+    if(isd(c)||(c==='.'&&isd(s[i+1]))){
+      let j=i+1; while(j<s.length&&(isd(s[j])||s[j]==='.'))j++;
+      if(s[j]==='e'||s[j]==='E'){ let k=j+1; if(s[k]==='+'||s[k]==='-')k++; if(isd(s[k])){ j=k+1; while(j<s.length&&isd(s[j]))j++; } }
+      toks.push({t:'num',v:parseFloat(s.slice(i,j))}); i=j; continue;
+    }
+    if(isa(c)){ let j=i+1; while(j<s.length&&isa(s[j]))j++; toks.push({t:'name',v:s.slice(i,j).toLowerCase()}); i=j; continue; }
+    if('+-*/^()'.includes(c)){ toks.push({t:c}); i++; continue; }
+    throw new Error('unexpected character "'+c+'"');
+  }
+  toks.push({t:'end'}); return toks;
+}
+function parse(str){
+  const toks=tokenize(str); let pos=0;
+  const peek=()=>toks[pos], next=()=>toks[pos++];
+  const startsFactor=()=>{const t=peek().t; return t==='num'||t==='name'||t==='(';};
+  function parseExpr(){
+    let a=parseTerm();
+    while(peek().t==='+'||peek().t==='-'){const op=next().t; const b=parseTerm(); a={type:op==='+'?'add':'sub',a,b};}
+    return a;
+  }
+  function parseTerm(){
+    let a=parseUnary();
+    for(;;){
+      if(peek().t==='*'||peek().t==='/'){const op=next().t; const b=parseUnary(); a={type:op==='*'?'mul':'div',a,b};}
+      else if(startsFactor()){ const b=parseUnary(); a={type:'mul',a,b}; }   // implicit multiplication: 2t, 3sin(t), (s)(s)
+      else break;
+    }
+    return a;
+  }
+  function parseUnary(){
+    if(peek().t==='+'){next(); return parseUnary();}
+    if(peek().t==='-'){next(); return {type:'neg',a:parseUnary()};}
+    return parsePow();
+  }
+  function parsePow(){
+    let a=parseAtom();
+    if(peek().t==='^'){ next(); const b=parseUnary(); return {type:'pow',a,b}; }  // right-assoc, allows e^-t
+    return a;
+  }
+  function parseAtom(){
+    const tk=peek();
+    if(tk.t==='num'){next(); return {type:'num',v:[tk.v,0]};}
+    if(tk.t==='('){next(); const e=parseExpr(); if(peek().t!==')') throw new Error('missing ")"'); next(); return e;}
+    if(tk.t==='name'){
+      next(); const nm=tk.v;
+      if(peek().t==='('){                                   // function call
+        if(!FUNCS[nm]) throw new Error('unknown function "'+nm+'"');
+        next(); const arg=parseExpr(); if(peek().t!==')') throw new Error('missing ")" after '+nm); next();
+        return {type:'call',name:nm,arg};
+      }
+      if(nm==='t') return {type:'var'};
+      if(nm==='pi') return {type:'num',v:[Math.PI,0]};
+      if(nm==='e')  return {type:'num',v:[Math.E,0]};
+      if(nm==='j'||nm==='i') return {type:'num',v:[0,1]};
+      throw new Error('unknown symbol "'+nm+'"');
+    }
+    throw new Error('unexpected '+(tk.t==='end'?'end of input':'"'+tk.t+'"'));
+  }
+  const ast=parseExpr();
+  if(peek().t!=='end') throw new Error('unexpected "'+peek().t+'"');
+  return ast;
+}
+
+/* ================================================================
+   2. NUMERIC EVALUATION of f(t)  (walk the AST in complex arithmetic)
+   ================================================================ */
+const CFUN={exp:cexp,sin:csin,cos:ccos,tan:ctan,sinh:csinh,cosh:ccosh,tanh:ctanh,sqrt:csqrt,
+           log:clog,ln:clog,abs:a=>[cabs(a),0]};
+function evalNum(node,t){
+  switch(node.type){
+    case 'num': return node.v;
+    case 'var': return [t,0];
+    case 'neg': return cscale(evalNum(node.a,t),-1);
+    case 'add': return cadd(evalNum(node.a,t),evalNum(node.b,t));
+    case 'sub': return csub(evalNum(node.a,t),evalNum(node.b,t));
+    case 'mul': return cmul(evalNum(node.a,t),evalNum(node.b,t));
+    case 'div': return cdiv(evalNum(node.a,t),evalNum(node.b,t));
+    case 'pow': return cpow(evalNum(node.a,t),evalNum(node.b,t));
+    case 'call': return CFUN[node.name](evalNum(node.arg,t));
+  }
+  throw new Error('bad node');
+}
+
+/* ================================================================
+   3. SYMBOLIC ENGINE  —  exponential-polynomial algebra.
+      An "ExpPoly" is a sum of atoms  c · t^n · e^{p t}  (c,p complex; n≥0 int).
+      Laplace{ c t^n e^{pt} } = c · n! / (s − p)^{n+1}.  Closed under +,−,×,
+      and under exp/sin/cos/sinh/cosh of an affine argument a0 + a1·t.
+      Anything outside the class throws SYMFAIL → numeric fallback.
+   ================================================================ */
+const SYMFAIL={sym:true};
+const pkey=p=>Math.round(p[0]*1e9)/1e9+'|'+Math.round(p[1]*1e9)/1e9;
+function epCombine(atoms){
+  const map=new Map();
+  for(const a of atoms){
+    const k=a.n+'@'+pkey(a.p);
+    if(map.has(k)){const e=map.get(k); e.c=cadd(e.c,a.c);}
+    else map.set(k,{c:a.c.slice(),n:a.n,p:a.p.slice()});
+  }
+  const out=[]; for(const e of map.values()) if(cabs(e.c)>1e-12) out.push(e);
+  return out;
+}
+const epConst=c=>(cabs(c)<1e-14?[]:[{c,n:0,p:[0,0]}]);
+const epT=[{c:[1,0],n:1,p:[0,0]}];
+const epNeg=A=>A.map(a=>({c:cscale(a.c,-1),n:a.n,p:a.p}));
+const epScaleC=(A,k)=>A.map(a=>({c:cmul(a.c,k),n:a.n,p:a.p}));
+const epAdd=(A,B)=>epCombine(A.concat(B));
+function epMul(A,B){const out=[];for(const a of A)for(const b of B)out.push({c:cmul(a.c,b.c),n:a.n+b.n,p:cadd(a.p,b.p)});return epCombine(out);}
+function epConstOf(A){                               // returns complex if A is a constant, else null
+  if(A.length===0) return [0,0];
+  if(A.length===1 && A[0].n===0 && cabs(A[0].p)<1e-12) return A[0].c;
+  return null;
+}
+function epAffine(A){                                // returns [a0,a1] if A = a0 + a1 t (all p≈0, n≤1), else SYMFAIL
+  let a0=[0,0],a1=[0,0];
+  for(const a of A){
+    if(cabs(a.p)>1e-12 || a.n>1) throw SYMFAIL;
+    if(a.n===0) a0=cadd(a0,a.c); else a1=cadd(a1,a.c);
+  }
+  return [a0,a1];
+}
+function epExp(A){const [a0,a1]=epAffine(A); return [{c:cexp(a0),n:0,p:a1}];}   // e^{a0+a1 t}
+function epCos(A){const P=epExp(epScaleC(A,[0,1])),M=epExp(epScaleC(A,[0,-1])); return epScaleC(epAdd(P,M),[0.5,0]);}
+function epSin(A){const P=epExp(epScaleC(A,[0,1])),M=epExp(epScaleC(A,[0,-1])); return epScaleC(epAdd(P,epNeg(M)),[0,-0.5]);}
+function epCosh(A){const P=epExp(A),M=epExp(epNeg(A)); return epScaleC(epAdd(P,M),[0.5,0]);}
+function epSinh(A){const P=epExp(A),M=epExp(epNeg(A)); return epScaleC(epAdd(P,epNeg(M)),[0.5,0]);}
+function toExpPoly(node){
+  switch(node.type){
+    case 'num': return epConst(node.v);
+    case 'var': return epT;
+    case 'neg': return epNeg(toExpPoly(node.a));
+    case 'add': return epAdd(toExpPoly(node.a),toExpPoly(node.b));
+    case 'sub': return epAdd(toExpPoly(node.a),epNeg(toExpPoly(node.b)));
+    case 'mul': return epMul(toExpPoly(node.a),toExpPoly(node.b));
+    case 'div':{
+      const B=toExpPoly(node.b), bc=epConstOf(B);
+      if(bc===null||cabs(bc)<1e-14) throw SYMFAIL;
+      return epScaleC(toExpPoly(node.a),cdiv([1,0],bc));
+    }
+    case 'pow':{
+      const A=toExpPoly(node.a), E=toExpPoly(node.b), ec=epConstOf(E);
+      if(ec!==null && Math.abs(ec[1])<1e-12 && Math.abs(ec[0]-Math.round(ec[0]))<1e-9 && ec[0]>=0){
+        let k=Math.round(ec[0]), R=epConst([1,0]); for(let i=0;i<k;i++) R=epMul(R,A); return R;
+      }
+      const bc=epConstOf(A);                          // base^exponent = exp( exponent · ln(base) )
+      if(bc!==null && cabs(bc)>1e-14) return epExp(epScaleC(E,clog(bc)));
+      throw SYMFAIL;
+    }
+    case 'call':{
+      const A=toExpPoly(node.arg);
+      switch(node.name){
+        case 'exp': return epExp(A);
+        case 'cos': return epCos(A);
+        case 'sin': return epSin(A);
+        case 'cosh':return epCosh(A);
+        case 'sinh':return epSinh(A);
+        default: throw SYMFAIL;                        // tan, sqrt, log, abs, ...
+      }
+    }
+  }
+  throw SYMFAIL;
+}
+const factorial=n=>{let r=1;for(let i=2;i<=n;i++)r*=i;return r;};
+function laplaceExact(atoms,s){                       // F(s) = Σ c·n!/(s−p)^{n+1}
+  let F=[0,0];
+  for(const a of atoms){
+    const den=cpow(csub(s,a.p),[a.n+1,0]);
+    F=cadd(F,cdiv(cscale(a.c,factorial(a.n)),den));
+  }
+  return F;
+}
+
+/* ================================================================
+   4. MODEL  —  compile the expression, build poles/ROC + the F(s) evaluator
+   ================================================================ */
+const el=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+let sc=[0.5,1.5];                                     // the cursor value of s
+let model=null;                                       // {ast, mode, Fval, atoms, poles, sigma_a, ...}
+
+function buildModel(){
+  const src=el('expr').value.trim();
+  let ast;
+  try{ ast=parse(src); }
+  catch(err){ return {ok:false,msg:err.message}; }
+  // smoke-test numeric eval at a couple of points
+  try{ const a=evalNum(ast,0), b=evalNum(ast,0.7); if(!isFinite(a[0])&&!isFinite(a[1])){} }
+  catch(err){ return {ok:false,msg:'cannot evaluate: '+err.message}; }
+
+  const T=Math.max(0.2, parseFloat(el('T').value)||6);
+  // try the exact (symbolic) path
+  let atoms=null;
+  try{ atoms=toExpPoly(ast); }catch(e){ if(e!==SYMFAIL && !(e&&e.sym)) atoms=null; else atoms=null; }
+
+  if(atoms){
+    // distinct poles + multiplicities; abscissa of convergence = max Re(p)
+    const pm=new Map(); let sigA=-Infinity;
+    for(const a of atoms){ const k=pkey(a.p); const cur=pm.get(k);
+      if(!cur||a.n+1>cur.m) pm.set(k,{p:a.p,m:a.n+1});
+      sigA=Math.max(sigA,a.p[0]); }
+    const poles=[...pm.values()];
+    return {ok:true, ast, T, mode:'exact', atoms, poles, sigmaA:(poles.length?sigA:-Infinity),
+            Fval:(re,im)=>laplaceExact(atoms,[re,im])};
+  }
+
+  // ---- numeric fallback: precompute f_k on [0,T], estimate abscissa, integrate ----
+  const N=1000;                                        // even → Simpson
+  const dt=T/N, tk=new Float64Array(N+1), fr=new Float64Array(N+1), fi=new Float64Array(N+1), w=new Float64Array(N+1);
+  for(let k=0;k<=N;k++){ const t=k*dt; tk[k]=t; let v; try{v=evalNum(ast,t);}catch(e){v=[NaN,NaN];}
+    fr[k]=v[0]; fi[k]=v[1]; w[k]=(k===0||k===N)?1:(k%2?4:2); w[k]*=dt/3; }
+  // abscissa of convergence: slope of ln|f| over the late window (robust-ish)
+  let sigA=0; { const lo=Math.floor(N*0.55); let t0=-1,l0=0,t1=-1,l1=0;
+    for(let k=lo;k<=N;k++){ const m=Math.hypot(fr[k],fi[k]); if(m>1e-9){ if(t0<0){t0=tk[k];l0=Math.log(m);} t1=tk[k];l1=Math.log(m);} }
+    if(t0>=0&&t1>t0) sigA=(l1-l0)/(t1-t0); else sigA=-3; sigA=Math.max(sigA,-1e3); }
+  const Fval=(re,im)=>{ let Re=0,Im=0;
+    for(let k=0;k<=N;k++){ const wk=w[k]; if(wk===0) continue;
+      const decay=Math.exp(-re*tk[k]), ang=im*tk[k], ca=Math.cos(ang), sa=Math.sin(ang);
+      // e^{-s t} = decay·(cos(ω t) − j sin(ω t));  f·e^{-st}·w
+      const er=decay*ca, ei=-decay*sa;                 // e^{-s t}
+      const pr=fr[k]*er-fi[k]*ei, pi=fr[k]*ei+fi[k]*er; // f·e^{-st}
+      Re+=wk*pr; Im+=wk*pi; }
+    return [Re,Im]; };
+  return {ok:true, ast, T, mode:'numeric', atoms:null, poles:null, sigmaA:sigA, Fval, N, tk};
+}
+
+/* ================================================================
+   5. CANVAS PLUMBING  (equal-aspect fit shared by the 2-D planes)
+   ================================================================ */
+const PAD={l:44,t:14,r:16,b:26};
+function fitDPR(cv){
+  const dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight;
+  cv.width=w*dpr; cv.height=h*dpr;
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx,w,h,dpr};
+}
+function metricsOf(cv){const w=cv.clientWidth,h=cv.clientHeight;return {w,h,W:w-PAD.l-PAD.r,H:h-PAD.t-PAD.b};}
+function actual(cv,v){
+  const M=metricsOf(cv);
+  const boxW=Math.max(v.x1max-v.x1min,1e-9), boxH=Math.max(v.x2max-v.x2min,1e-9);
+  const cx=(v.x1min+v.x1max)/2, cy=(v.x2min+v.x2max)/2;
+  const s=Math.min(M.W/boxW,M.H/boxH), hw=M.W/s/2, hh=M.H/s/2;
+  return {M,s,x1min:cx-hw,x1max:cx+hw,x2min:cy-hh,x2max:cy+hh};
+}
+const D2P=(x,y,A)=>[PAD.l+(x-A.x1min)/(A.x1max-A.x1min)*A.M.W, PAD.t+(1-(y-A.x2min)/(A.x2max-A.x2min))*A.M.H];
+const P2D=(px,py,A)=>[A.x1min+(px-PAD.l)/A.M.W*(A.x1max-A.x1min), A.x2min+(1-(py-PAD.t)/A.M.H)*(A.x2max-A.x2min)];
+function niceStep(span,target){const raw=span/target,mag=Math.pow(10,Math.floor(Math.log10(raw))),n=raw/mag;return (n<1.5?1:n<3?2:n<7?5:10)*mag;}
+const fmt=v=>!isFinite(v)?'∞':Math.abs(v)>=100||v===0?v.toFixed(0):Math.abs(v)>=10?v.toFixed(1):v.toFixed(2);
+const fmt3=v=>!isFinite(v)?'∞':(Math.abs(v)>=1000||(Math.abs(v)<0.01&&v!==0))?v.toExponential(2):(Math.round(v*1000)/1000).toString();
+const fmtTick=v=>{const a=Math.abs(v);return a>=1000||(a<0.01&&a>0)?v.toExponential(0):(Math.round(v*100)/100).toString();};
+function fmtC(re,im){const r=fmt3(re);if(Math.abs(im)<1e-9)return r;return `${r} ${im<0?'−':'+'} ${fmt3(Math.abs(im))}j`;}
+function drawGrid(ctx,A,labX,labY,opt){
+  const M=A.M; opt=opt||{};
+  ctx.save(); ctx.beginPath(); ctx.rect(PAD.l,PAD.t,M.W,M.H); ctx.clip();
+  ctx.font='10px ui-monospace,monospace';
+  const sx=niceStep(A.x1max-A.x1min,8), sy=niceStep(A.x2max-A.x2min,7);
+  for(let x=Math.ceil(A.x1min/sx)*sx;x<=A.x1max;x+=sx){const [px]=D2P(x,A.x2min,A),z=Math.abs(x)<1e-9;
+    ctx.strokeStyle=z?(opt.zx||'rgba(138,166,198,.5)'):'rgba(138,166,198,.12)';ctx.lineWidth=z?1.4:1;
+    ctx.beginPath();ctx.moveTo(px,PAD.t);ctx.lineTo(px,PAD.t+M.H);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)';ctx.fillText(fmtTick(x),px+3,PAD.t+M.H-4);}
+  for(let y=Math.ceil(A.x2min/sy)*sy;y<=A.x2max;y+=sy){const [,py]=D2P(A.x1min,y,A),z=Math.abs(y)<1e-9;
+    ctx.strokeStyle=z?(opt.zy||'rgba(138,166,198,.5)'):'rgba(138,166,198,.12)';ctx.lineWidth=z?1.4:1;
+    ctx.beginPath();ctx.moveTo(PAD.l,py);ctx.lineTo(PAD.l+M.W,py);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)';ctx.fillText(fmtTick(y),PAD.l+3,py-3);}
+  ctx.restore();
+  ctx.fillStyle='rgba(138,166,198,.85)';ctx.font='11px ui-monospace,monospace';
+  ctx.fillText(labX,PAD.l+M.W-54,PAD.t+M.H+18); ctx.fillText(labY,6,PAD.t+10);
+}
+// phase → hue (cyclic), used identically by the surface and the ring key
+const phaseHue=ph=>((ph*180/Math.PI)%360+360)%360;
+const phaseCSS=(ph,L)=>`hsl(${phaseHue(ph).toFixed(0)},72%,${L}%)`;
+
+/* ================================================================
+   6. SURFACE DATA  —  sample |F| and ∠F over the s-plane grid
+   ================================================================ */
+const srange={sMin:-3,sMax:2,wMin:-6,wMax:6};
+let surf=null;                                        // {G, mag[], ph[], scaleZ, capH}
+const GRID=46;
+function quantile(sorted,q){if(!sorted.length)return 0;const i=clamp(q*(sorted.length-1),0,sorted.length-1),lo=Math.floor(i),hi=Math.ceil(i);return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo);}
+function buildSurface(){
+  if(!model||!model.ok){surf=null;return;}
+  const G=GRID, mag=new Float64Array(G*G), ph=new Float64Array(G*G), fin=[];
+  for(let i=0;i<G;i++){ const sig=srange.sMin+i/(G-1)*(srange.sMax-srange.sMin);
+    for(let j=0;j<G;j++){ const om=srange.wMin+j/(G-1)*(srange.wMax-srange.wMin);
+      const F=model.Fval(sig,om), m=cabs(F);
+      mag[i*G+j]=m; ph[i*G+j]=carg(F); if(isFinite(m)) fin.push(m); }}
+  fin.sort((a,b)=>a-b);
+  const scaleZ=Math.max(quantile(fin,0.72),1e-9);     // typical value → mid height
+  surf={G,mag,ph,scaleZ,capR:2.4,HZ:0.55};            // model height = min(|F|/scaleZ,capR)·HZ
+}
+const heightModel=m=>Math.min((isFinite(m)?m:1e9)/surf.scaleZ, surf.capR)*surf.HZ;
+
+/* ================================================================
+   7. 3-D PROJECTION  (orthographic; az about vertical, el tilt)
+   ================================================================ */
+const view3d={az:-0.62, el:0.44, zoom:1, panx:0, pany:0};
+let PJ=null;                                          // cached params for floor picking {CX,CY,S,ca,sa,ce,se,z}
+const uOf=sig=>2*(sig-srange.sMin)/(srange.sMax-srange.sMin)-1;
+const vOf=om =>2*(om -srange.wMin)/(srange.wMax-srange.wMin)-1;
+const sigOfU=u=>srange.sMin+(u+1)/2*(srange.sMax-srange.sMin);
+const omOfV =v=>srange.wMin+(v+1)/2*(srange.wMax-srange.wMin);
+function proj(u,v,w){
+  const {CX,CY,S,ca,sa,ce,se}=PJ;
+  const u1=ca*u-sa*v, v1=sa*u+ca*v;
+  const v2=ce*v1-se*w, w2=se*v1+ce*w;
+  return [CX+PJ.panx+S*u1, CY+PJ.pany-S*w2, v2];
+}
+function floorPick(px,py){                            // screen → (u,v) on the w=0 plane
+  const {CX,CY,S,ca,sa,ce,se}=PJ;
+  const u1=(px-CX-PJ.panx)/S, w2=(CY+PJ.pany-py)/S;
+  const v1=w2/se;                                     // w=0 ⇒ w2 = se·v1
+  return [ca*u1+sa*v1, -sa*u1+ca*v1];
+}
+
+/* ================================================================
+   8. RENDER — the |F(s)| surface
+   ================================================================ */
+function drawSurface(){
+  const cv=el('surf'); const {ctx,w,h}=fitDPR(cv);
+  ctx.clearRect(0,0,w,h);
+  if(!surf){return;}
+  const S=Math.min(w,h)*0.33;
+  PJ={CX:w*0.5, CY:h*0.70, S, zoom:view3d.zoom, panx:view3d.panx, pany:view3d.pany,
+      ca:Math.cos(view3d.az), sa:Math.sin(view3d.az), ce:Math.cos(view3d.el), se:Math.max(0.09,Math.sin(view3d.el))};
+  PJ.S=S*view3d.zoom;
+
+  // ---- floor: grid + ROC shading + boundary ----
+  drawFloor(ctx);
+
+  // ---- surface quads (painter's algorithm) ----
+  const G=surf.G, PX=new Float64Array(G*G), PY=new Float64Array(G*G), PD=new Float64Array(G*G), Wv=new Float64Array(G*G);
+  for(let i=0;i<G;i++)for(let j=0;j<G;j++){ const w0=heightModel(surf.mag[i*G+j]);
+    const p=proj(uOf(sigAt(i)),vOf(omAt(j)),w0); const idx=i*G+j; PX[idx]=p[0];PY[idx]=p[1];PD[idx]=p[2];Wv[idx]=w0; }
+  const quads=[];
+  for(let i=0;i<G-1;i++)for(let j=0;j<G-1;j++){
+    const a=i*G+j,b=(i+1)*G+j,c=(i+1)*G+j+1,d=i*G+j+1;
+    // model-space normal (steepness → shading), and average phase (circular) for hue
+    const wa=Wv[a],wb=Wv[b],wc=Wv[c],wd=Wv[d];
+    const du=2/(G-1), dv=2/(G-1);
+    const nu=-((wb-wa))/du, nv=-((wd-wa))/dv, nw=1;    // ∂w/∂u,∂w/∂v → normal (−wu,−wv,1)
+    const nn=Math.hypot(nu,nv,nw), shade=0.40+0.55*Math.abs(nw/nn);
+    let sr=0,si=0; for(const q of [a,b,c,d]){const p=surf.ph[q]; sr+=Math.cos(p); si+=Math.sin(p);}
+    const hue=phaseHue(Math.atan2(si,sr)), L=(26+34*shade).toFixed(0);
+    quads.push({d:(PD[a]+PD[b]+PD[c]+PD[d])*0.25, xs:[PX[a],PX[b],PX[c],PX[d]], ys:[PY[a],PY[b],PY[c],PY[d]],
+                fill:`hsl(${hue.toFixed(0)},70%,${L}%)`});
+  }
+  quads.sort((p,q)=>q.d-p.d);                          // far first
+  ctx.lineJoin='round';
+  for(const Q of quads){
+    ctx.beginPath(); ctx.moveTo(Q.xs[0],Q.ys[0]); for(let k=1;k<4;k++) ctx.lineTo(Q.xs[k],Q.ys[k]); ctx.closePath();
+    ctx.fillStyle=Q.fill; ctx.fill();
+    ctx.strokeStyle='rgba(6,14,26,.30)'; ctx.lineWidth=0.6; ctx.stroke();
+  }
+
+  // ---- exact poles: dashed spike + × on the floor ----
+  if(model.mode==='exact' && model.poles){
+    ctx.save(); ctx.setLineDash([4,4]);
+    for(const pl of model.poles){ const sg=pl.p[0], om=pl.p[1];
+      if(sg<srange.sMin||sg>srange.sMax||om<srange.wMin||om>srange.wMax) continue;
+      const b=proj(uOf(sg),vOf(om),0), tp=proj(uOf(sg),vOf(om),surf.capR*surf.HZ);
+      ctx.strokeStyle='rgba(255,107,107,.85)'; ctx.lineWidth=1.4;
+      ctx.beginPath(); ctx.moveTo(b[0],b[1]); ctx.lineTo(tp[0],tp[1]); ctx.stroke();
+      ctx.setLineDash([]); ctx.fillStyle='#FF6B6B'; ctx.font='bold 13px ui-monospace,monospace';
+      ctx.fillText('×',b[0]-4,b[1]+5); ctx.setLineDash([4,4]);
+    }
+    ctx.restore();
+  }
+
+  // ---- the cursor: vertical line from floor to surface ----
+  { const F=model.Fval(sc[0],sc[1]), m=cabs(F), wc=heightModel(m);
+    const b=proj(uOf(sc[0]),vOf(sc[1]),0), tp=proj(uOf(sc[0]),vOf(sc[1]),wc);
+    ctx.strokeStyle='rgba(234,241,251,.9)'; ctx.lineWidth=1.6;
+    ctx.beginPath(); ctx.moveTo(b[0],b[1]); ctx.lineTo(tp[0],tp[1]); ctx.stroke();
+    ctx.fillStyle='#FFCB05'; ctx.beginPath(); ctx.arc(b[0],b[1],4,0,7); ctx.fill();
+    ctx.shadowColor='#fff'; ctx.shadowBlur=10; ctx.fillStyle='#fff';
+    ctx.beginPath(); ctx.arc(tp[0],tp[1],4.5,0,7); ctx.fill(); ctx.shadowBlur=0;
+    ctx.strokeStyle=phaseCSS(carg(F),55); ctx.lineWidth=2; ctx.beginPath(); ctx.arc(tp[0],tp[1],4.5,0,7); ctx.stroke();
+  }
+  // ---- axis labels ----
+  ctx.fillStyle='rgba(234,241,251,.85)'; ctx.font='11px ui-monospace,monospace';
+  const lRe=proj(1.18,0,0), lIm=proj(0,1.18,0), lZ=proj(-1,-1,surf.capR*surf.HZ+0.12);
+  ctx.fillText('Re s = σ',lRe[0]-14,lRe[1]+4); ctx.fillText('Im s = ω',lIm[0]-14,lIm[1]+4);
+  ctx.fillText('|F(s)|',lZ[0]-14,lZ[1]);
+}
+const sigAt=i=>srange.sMin+i/(surf.G-1)*(srange.sMax-srange.sMin);
+const omAt =j=>srange.wMin+j/(surf.G-1)*(srange.wMax-srange.wMin);
+function drawFloor(ctx){
+  const sx=niceStep(srange.sMax-srange.sMin,6), sy=niceStep(srange.wMax-srange.wMin,6);
+  // ROC region (Re s > sigma_a) tinted on the floor
+  if(model && isFinite(model.sigmaA) && model.sigmaA<srange.sMax){
+    const a=Math.max(model.sigmaA,srange.sMin);
+    const c1=proj(uOf(a),vOf(srange.wMin),0), c2=proj(uOf(srange.sMax),vOf(srange.wMin),0),
+          c3=proj(uOf(srange.sMax),vOf(srange.wMax),0), c4=proj(uOf(a),vOf(srange.wMax),0);
+    ctx.fillStyle='rgba(91,214,160,.10)'; ctx.beginPath();
+    ctx.moveTo(c1[0],c1[1]);ctx.lineTo(c2[0],c2[1]);ctx.lineTo(c3[0],c3[1]);ctx.lineTo(c4[0],c4[1]);ctx.closePath();ctx.fill();
+  }
+  ctx.strokeStyle='rgba(138,166,198,.16)'; ctx.lineWidth=1;
+  for(let x=Math.ceil(srange.sMin/sx)*sx;x<=srange.sMax+1e-9;x+=sx){
+    const p0=proj(uOf(x),vOf(srange.wMin),0),p1=proj(uOf(x),vOf(srange.wMax),0);
+    ctx.beginPath();ctx.moveTo(p0[0],p0[1]);ctx.lineTo(p1[0],p1[1]);ctx.stroke();}
+  for(let y=Math.ceil(srange.wMin/sy)*sy;y<=srange.wMax+1e-9;y+=sy){
+    const p0=proj(uOf(srange.sMin),vOf(y),0),p1=proj(uOf(srange.sMax),vOf(y),0);
+    ctx.beginPath();ctx.moveTo(p0[0],p0[1]);ctx.lineTo(p1[0],p1[1]);ctx.stroke();}
+  // jω axis (Re s = 0) and ROC boundary
+  if(0>=srange.sMin&&0<=srange.sMax){const p0=proj(uOf(0),vOf(srange.wMin),0),p1=proj(uOf(0),vOf(srange.wMax),0);
+    ctx.strokeStyle='rgba(255,203,5,.5)';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(p0[0],p0[1]);ctx.lineTo(p1[0],p1[1]);ctx.stroke();}
+  if(model&&isFinite(model.sigmaA)&&model.sigmaA>srange.sMin&&model.sigmaA<srange.sMax){
+    const p0=proj(uOf(model.sigmaA),vOf(srange.wMin),0),p1=proj(uOf(model.sigmaA),vOf(srange.wMax),0);
+    ctx.strokeStyle='rgba(91,214,160,.7)';ctx.setLineDash([5,4]);ctx.lineWidth=1.3;
+    ctx.beginPath();ctx.moveTo(p0[0],p0[1]);ctx.lineTo(p1[0],p1[1]);ctx.stroke();ctx.setLineDash([]);}
+  // floor border
+  ctx.strokeStyle='rgba(138,166,198,.4)';ctx.lineWidth=1.2;
+  const b=[proj(-1,-1,0),proj(1,-1,0),proj(1,1,0),proj(-1,1,0)];
+  ctx.beginPath();ctx.moveTo(b[0][0],b[0][1]);for(let k=1;k<4;k++)ctx.lineTo(b[k][0],b[k][1]);ctx.closePath();ctx.stroke();
+}
+
+/* ================================================================
+   9. RENDER — the 2-D s-plane inspector
+   ================================================================ */
+const viewS={x1min:-3,x1max:2,x2min:-6,x2max:6};
+function drawSPlane(){
+  const cv=el('splane'); const {ctx}=fitDPR(cv); const A=actual(cv,viewS); const M=A.M;
+  ctx.clearRect(0,0,M.w,M.h);
+  // ROC shading: Re s > sigma_a
+  if(model&&isFinite(model.sigmaA)){
+    const [zx]=D2P(clamp(model.sigmaA,A.x1min,A.x1max),0,A);
+    ctx.save();ctx.beginPath();ctx.rect(PAD.l,PAD.t,M.W,M.H);ctx.clip();
+    ctx.fillStyle='rgba(91,214,160,.09)';ctx.fillRect(zx,PAD.t,PAD.l+M.W-zx,M.H);ctx.restore();
+  }
+  drawGrid(ctx,A,'Re s = σ','Im s = ω',{zx:'rgba(255,203,5,.55)'});
+  // ROC boundary line
+  if(model&&isFinite(model.sigmaA)&&model.sigmaA>A.x1min&&model.sigmaA<A.x1max){
+    const [bx]=D2P(model.sigmaA,0,A);
+    ctx.save();ctx.beginPath();ctx.rect(PAD.l,PAD.t,M.W,M.H);ctx.clip();
+    ctx.strokeStyle='rgba(91,214,160,.75)';ctx.setLineDash([5,4]);ctx.lineWidth=1.3;
+    ctx.beginPath();ctx.moveTo(bx,PAD.t);ctx.lineTo(bx,PAD.t+M.H);ctx.stroke();ctx.setLineDash([]);ctx.restore();
+    ctx.fillStyle='rgba(91,214,160,.8)';ctx.font='10px ui-monospace,monospace';ctx.fillText('ROC →',bx+4,PAD.t+12);
+  }
+  // exact poles
+  if(model&&model.mode==='exact'&&model.poles){
+    ctx.save();ctx.beginPath();ctx.rect(PAD.l,PAD.t,M.W,M.H);ctx.clip();
+    ctx.strokeStyle='#FF6B6B';ctx.lineWidth=2;
+    for(const pl of model.poles){const [px,py]=D2P(pl.p[0],pl.p[1],A),r=5;
+      ctx.beginPath();ctx.moveTo(px-r,py-r);ctx.lineTo(px+r,py+r);ctx.moveTo(px+r,py-r);ctx.lineTo(px-r,py+r);ctx.stroke();
+      if(pl.m>1){ctx.fillStyle='#FF6B6B';ctx.font='9px ui-monospace,monospace';ctx.fillText('×'+pl.m,px+7,py-5);}}
+    ctx.restore();
+  }
+  // cursor marker
+  const [mx,my]=D2P(sc[0],sc[1],A);
+  ctx.save();ctx.shadowColor='#FFCB05';ctx.shadowBlur=12;ctx.fillStyle='#FFCB05';
+  ctx.beginPath();ctx.arc(mx,my,6,0,7);ctx.fill();ctx.shadowBlur=0;
+  ctx.lineWidth=2;ctx.strokeStyle='#fff';ctx.beginPath();ctx.arc(mx,my,6,0,7);ctx.stroke();ctx.restore();
+}
+
+/* ================================================================
+   10. RENDER — F(s) value + phase-color ring key
+   ================================================================ */
+function drawRing(){
+  const cv=el('ring'); const {ctx,w,h}=fitDPR(cv);
+  ctx.clearRect(0,0,w,h);
+  const cx=w/2, cy=h/2, Ro=Math.min(w,h)*0.44, Ri=Ro*0.80;
+  // hue key annulus
+  const seg=90;
+  for(let k=0;k<seg;k++){ const a0=k/seg*2*Math.PI, a1=(k+1)/seg*2*Math.PI, mid=(a0+a1)/2;
+    ctx.beginPath();ctx.arc(cx,cy,Ro,-a1,-a0,false);ctx.arc(cx,cy,Ri,-a0,-a1,true);ctx.closePath();
+    ctx.fillStyle=`hsl(${phaseHue(mid).toFixed(0)},72%,52%)`;ctx.fill(); }
+  // phase tick labels
+  ctx.fillStyle='rgba(234,241,251,.7)';ctx.font='10px ui-monospace,monospace';ctx.textAlign='center';
+  const labs=[['0',0],['π/2',Math.PI/2],['±π',Math.PI],['−π/2',-Math.PI/2]];
+  for(const [t,a] of labs){const rr=Ro+11;ctx.fillText(t,cx+rr*Math.cos(a),cy-rr*Math.sin(a)+3);}
+  ctx.textAlign='left';
+  // inner value plane: axes + compressed magnitude rings
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,Ri-2,0,7);ctx.clip();
+  ctx.strokeStyle='rgba(138,166,198,.25)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(cx-Ri,cy);ctx.lineTo(cx+Ri,cy);ctx.moveTo(cx,cy-Ri);ctx.lineTo(cx,cy+Ri);ctx.stroke();
+  for(const q of [0.33,0.66]){ctx.beginPath();ctx.arc(cx,cy,(Ri-2)*q,0,7);ctx.setLineDash([3,4]);ctx.stroke();ctx.setLineDash([]);}
+  // F(s) dot: angle = ∠F, radius = compressed |F|  (rr = (2/π)atan(|F|/scale))
+  const F=model?model.Fval(sc[0],sc[1]):[0,0], m=cabs(F), th=carg(F);
+  const scaleRef=surf?surf.scaleZ:1;
+  const rr=(2/Math.PI)*Math.atan(m/(scaleRef||1))*(Ri-4);
+  const dx=cx+rr*Math.cos(-th), dy=cy+rr*Math.sin(-th);   // canvas y down
+  ctx.strokeStyle='rgba(234,241,251,.5)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(dx,dy);ctx.stroke();
+  ctx.restore();
+  // marker on the ring at ∠F (the key readout)
+  const nx=cx+(Ro+Ri)/2*Math.cos(-th), ny=cy+(Ro+Ri)/2*Math.sin(-th);
+  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(nx,ny,4,0,7);ctx.fill();
+  ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.stroke();
+  // the value dot
+  ctx.shadowColor='#fff';ctx.shadowBlur=8;ctx.fillStyle=phaseCSS(th,58);
+  ctx.beginPath();ctx.arc(dx,dy,5,0,7);ctx.fill();ctx.shadowBlur=0;
+  ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(dx,dy,5,0,7);ctx.stroke();
+}
+
+/* ================================================================
+   11. RENDER — f(t) time domain (static + scrubber)
+   ================================================================ */
+let tScrub=0, tPlot=null;                              // tPlot={ts,re,im,Tend,hasIm}
+function buildTimePlot(){
+  if(!model||!model.ok){tPlot=null;return;}
+  const T=model.T, N=600, ts=new Float64Array(N+1), re=new Float64Array(N+1), im=new Float64Array(N+1);
+  let hasIm=false;
+  for(let k=0;k<=N;k++){const t=k*T/N;ts[k]=t;let v;try{v=evalNum(model.ast,t);}catch(e){v=[NaN,NaN];}
+    re[k]=v[0];im[k]=v[1];if(Math.abs(v[1])>1e-7)hasIm=true;}
+  tPlot={ts,re,im,Tend:T,hasIm,N};
+  tScrub=clamp(tScrub,0,T);
+}
+function drawTime(){
+  const cv=el('tstrip'); const {ctx,w,h}=fitDPR(cv);
+  const pL=46,pR=14,pT=12,pB=24,W=w-pL-pR,H=h-pT-pB;
+  ctx.clearRect(0,0,w,h);
+  if(!tPlot){return;}
+  const {ts,re,im,Tend,hasIm}=tPlot;
+  // y-range: true amplitude, capped at 3× the early-window peak so blow-ups clip
+  let lo=Infinity,hi=-Infinity,em=0; const k0=Math.max(3,Math.ceil(0.12*ts.length));
+  for(let i=0;i<ts.length;i++){const a=re[i];if(isFinite(a)){lo=Math.min(lo,a);hi=Math.max(hi,a);if(i<k0)em=Math.max(em,Math.abs(a));}
+    if(hasIm){const b=im[i];if(isFinite(b)){lo=Math.min(lo,b);hi=Math.max(hi,b);if(i<k0)em=Math.max(em,Math.abs(b));}}}
+  if(em>0){hi=Math.min(hi,3*em);lo=Math.max(lo,-3*em);}
+  if(!isFinite(lo)||!isFinite(hi)||hi-lo<1e-9){lo=-1;hi=1;}
+  lo=Math.min(lo,0);hi=Math.max(hi,0);const mg=(hi-lo)*0.1;lo-=mg;hi+=mg;
+  const X=t=>pL+t/Tend*W, Y=v=>pT+(1-(v-lo)/(hi-lo))*H;
+  ctx.font='10px ui-monospace,monospace';
+  const sy=niceStep(hi-lo,5);
+  for(let y=Math.ceil(lo/sy)*sy;y<=hi;y+=sy){const yy=Y(y);
+    ctx.strokeStyle=Math.abs(y)<1e-9?'rgba(138,166,198,.4)':'rgba(138,166,198,.12)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(pL,yy);ctx.lineTo(pL+W,yy);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)';ctx.fillText(fmtTick(y),4,yy+3);}
+  const sx=niceStep(Tend,6);
+  for(let x=0;x<=Tend+1e-9;x+=sx){const xx=X(x);
+    ctx.strokeStyle='rgba(138,166,198,.12)';ctx.beginPath();ctx.moveTo(xx,pT);ctx.lineTo(xx,pT+H);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)';ctx.fillText(fmtTick(x),xx+2,pT+H+15);}
+  ctx.fillStyle='rgba(138,166,198,.8)';ctx.fillText('t (s)',pL+W-30,pT+H+15);
+  ctx.save();ctx.beginPath();ctx.rect(pL,pT,W,H);ctx.clip();
+  if(hasIm) tline(ctx,ts,im,X,Y,'#FFCB05');
+  tline(ctx,ts,re,X,Y,'#57C7FF');
+  // scrubber
+  const xs=X(tScrub);
+  ctx.setLineDash([4,4]);ctx.strokeStyle='rgba(234,241,251,.7)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(xs,pT);ctx.lineTo(xs,pT+H);ctx.stroke();ctx.setLineDash([]);
+  const fv=evalNum(model.ast,tScrub);
+  ctx.fillStyle='#57C7FF';ctx.beginPath();ctx.arc(xs,Y(fv[0]),3.5,0,7);ctx.fill();
+  if(hasIm){ctx.fillStyle='#FFCB05';ctx.beginPath();ctx.arc(xs,Y(fv[1]),3.5,0,7);ctx.fill();}
+  ctx.restore();
+}
+function tline(ctx,ts,arr,X,Y,color){
+  ctx.strokeStyle=color;ctx.lineWidth=1.8;ctx.lineJoin='round';ctx.beginPath();let pen=false;
+  for(let i=0;i<ts.length;i++){const v=arr[i];if(!isFinite(v)){pen=false;continue;}
+    const x=X(ts[i]),y=Y(v);pen?ctx.lineTo(x,y):ctx.moveTo(x,y);pen=true;}
+  ctx.stroke();
+}
+
+/* ================================================================
+   12. READOUTS
+   ================================================================ */
+function updateReadouts(){
+  el('roSrect').textContent=fmtC(sc[0],sc[1]);
+  const rS=Math.hypot(sc[0],sc[1]),thS=Math.atan2(sc[1],sc[0]);
+  el('roSpol').textContent=`${fmt3(rS)} · e^(${fmt3(thS)}j)`;
+  const F=model?model.Fval(sc[0],sc[1]):[0,0], rF=cabs(F), thF=carg(F);
+  el('roFrect').textContent=fmtC(F[0],F[1]);
+  el('roFpol').textContent=`${fmt3(rF)} · e^(${fmt3(thF)}j)`;
+  el('fSwatch').style.background=phaseCSS(thF,55);
+  // time readouts
+  el('roT').textContent=fmt3(tScrub);
+  if(model){const fv=evalNum(model.ast,tScrub);el('roFt').textContent=fmtC(fv[0],fv[1]);}
+}
+function updatePolesBox(){
+  if(!model||!model.ok){el('pvFs').textContent='—';el('pvPoles').textContent='—';el('pvRoc').textContent='—';return;}
+  if(model.mode==='exact'){
+    el('pvFs').innerHTML='rational — exact (sum of t<sup>n</sup>e<sup>at</sup>·sinusoid terms)';
+    if(!model.poles.length){el('pvPoles').innerHTML='none (F(s) ≡ 0)';el('pvRoc').textContent='all s';return;}
+    const parts=model.poles.map(pl=>{const s='s = '+fmtC(pl.p[0],pl.p[1]);return s+(pl.m>1?' (order '+pl.m+')':'');});
+    el('pvPoles').innerHTML=parts.map(p=>'<span class="x">×</span> '+p).join('&nbsp;&nbsp; ');
+    el('pvRoc').innerHTML='Re(s) &gt; '+fmt3(model.sigmaA)+' &nbsp;<span style="color:var(--good)">(right of the rightmost pole)</span>';
+  }else{
+    el('pvFs').innerHTML='numeric — ∫₀<sup>T='+fmt3(model.T)+'</sup> f(t) e<sup>−st</sup> dt (ROC-limited)';
+    el('pvPoles').innerHTML='<span style="color:var(--muted)">not identified in numeric mode</span>';
+    el('pvRoc').innerHTML='Re(s) &gt; '+fmt3(model.sigmaA)+' &nbsp;<span style="color:var(--maize)">(estimated abscissa; surface left of it is a truncated approximation)</span>';
+  }
+}
+
+/* ================================================================
+   13. ORCHESTRATION
+   ================================================================ */
+function setMode(m,msg){
+  const pill=el('modePill');
+  pill.className='pill '+(m==='exact'?'exact':m==='numeric'?'numeric':'err');
+  pill.textContent=m.toUpperCase();
+  el('surfStatus').className='status'+(m==='numeric'?' warn':'');
+  el('surfStatus').textContent = m==='numeric'
+    ? 'Numeric mode: F(s) ≈ ∫₀ᵀ f(t)e⁻ˢᵗdt — only valid right of the dashed abscissa; poles not identified.'
+    : (m==='err' ? ('⚠ '+msg) : 'height = |F(s)| · color = ∠F(s) · vertical line marks the cursor s.');
+}
+function rebuild(){
+  const m=buildModel();
+  el('expr').classList.toggle('bad',!m.ok);
+  if(!m.ok){ setMode('err',m.msg); return; }
+  model=m;
+  el('f0').textContent=fmtC(...evalNum(model.ast,0));
+  setMode(model.mode);
+  buildSurface(); buildTimePlot(); redrawAll();
+}
+function redrawAll(){ drawSurface(); drawSPlane(); drawRing(); drawTime(); updateReadouts(); updatePolesBox(); }
+function cursorUpdate(){ drawSurface(); drawSPlane(); drawRing(); updateReadouts(); }
+function setS(re,im){ sc=[re,im]; cursorUpdate(); }
+
+/* ================================================================
+   14. INTERACTION
+   ================================================================ */
+// --- f(t) input ---
+el('run').onclick=rebuild;
+el('expr').addEventListener('change',rebuild);
+el('expr').addEventListener('keydown',e=>{if(e.key==='Enter')rebuild();});
+el('T').addEventListener('change',rebuild);
+// --- surface range fields ---
+function syncRangeFields(){el('sMin').value=srange.sMin;el('sMax').value=srange.sMax;el('wMin').value=srange.wMin;el('wMax').value=srange.wMax;
+  el('pRe0').value=+viewS.x1min.toFixed(2);el('pRe1').value=+viewS.x1max.toFixed(2);el('pIm0').value=+viewS.x2min.toFixed(2);el('pIm1').value=+viewS.x2max.toFixed(2);}
+['sMin','sMax','wMin','wMax'].forEach(id=>el(id).addEventListener('change',()=>{
+  const a=parseFloat(el('sMin').value),b=parseFloat(el('sMax').value),c=parseFloat(el('wMin').value),d=parseFloat(el('wMax').value);
+  if(isFinite(a)&&isFinite(b)&&b>a){srange.sMin=a;srange.sMax=b;} if(isFinite(c)&&isFinite(d)&&d>c){srange.wMin=c;srange.wMax=d;}
+  buildSurface();redrawAll();}));
+function axisHandler(ids,v,after){ids.forEach(id=>el(id).addEventListener('change',()=>{
+  const a=parseFloat(el(ids[0]).value),b=parseFloat(el(ids[1]).value),c=parseFloat(el(ids[2]).value),d=parseFloat(el(ids[3]).value);
+  if(isFinite(a)&&isFinite(b)&&b>a){v.x1min=a;v.x1max=b;} if(isFinite(c)&&isFinite(d)&&d>c){v.x2min=c;v.x2max=d;} after();}));}
+axisHandler(['pRe0','pRe1','pIm0','pIm1'],viewS,()=>drawSPlane());
+
+// --- surface: tilt / pan / zoom / drag floor cursor ---
+(function(){
+  const cv=el('surf'); let down=null;
+  cv.addEventListener('mousedown',e=>{
+    const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+    // near the floor cursor? → drag s
+    let onCursor=false; if(PJ){const b=proj(uOf(sc[0]),vOf(sc[1]),0); onCursor=Math.hypot(x-b[0],y-b[1])<14;}
+    down={x,y,lx:x,ly:y,mode:(e.shiftKey||e.button===1||e.button===2)?'pan':(onCursor?'cursor':'rot')};
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove',e=>{
+    if(!down)return; const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,dx=x-down.lx,dy=y-down.ly;
+    if(down.mode==='rot'){view3d.az-=dx*0.008;view3d.el=clamp(view3d.el+dy*0.008,0.09,1.45);drawSurface();}
+    else if(down.mode==='pan'){view3d.panx+=dx;view3d.pany+=dy;drawSurface();}
+    else if(down.mode==='cursor'){const [u,v]=floorPick(x,y);setS(clamp(sigOfU(u),srange.sMin,srange.sMax),clamp(omOfV(v),srange.wMin,srange.wMax));}
+    down.lx=x;down.ly=y;
+  });
+  window.addEventListener('mouseup',()=>{down=null;});
+  cv.addEventListener('contextmenu',e=>e.preventDefault());
+  cv.addEventListener('wheel',e=>{e.preventDefault();view3d.zoom=clamp(view3d.zoom*(e.deltaY>0?1/1.1:1.1),0.3,4);drawSurface();},{passive:false});
+})();
+
+// --- s-plane: drag cursor / pan / zoom ---
+(function(){
+  const cv=el('splane'); let down=null;
+  cv.addEventListener('mousedown',e=>{const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+    const A=actual(cv,viewS),[mx,my]=D2P(sc[0],sc[1],A);
+    down={x,y,lx:x,ly:y,moved:false,mode:Math.hypot(x-mx,y-my)<14?'marker':'pan'};});
+  window.addEventListener('mousemove',e=>{if(!down)return;
+    const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,A=actual(cv,viewS);
+    if(Math.hypot(x-down.x,y-down.y)>4)down.moved=true;
+    if(down.mode==='marker'){const [a,b]=P2D(x,y,A);setS(a,b);}
+    else if(down.moved){const dx=x-down.lx,dy=y-down.ly,rx=viewS.x1max-viewS.x1min,ry=viewS.x2max-viewS.x2min;
+      viewS.x1min-=dx/A.M.W*rx;viewS.x1max-=dx/A.M.W*rx;viewS.x2min+=dy/A.M.H*ry;viewS.x2max+=dy/A.M.H*ry;
+      down.lx=x;down.ly=y;syncRangeFields();drawSPlane();}});
+  window.addEventListener('mouseup',()=>{if(down&&!down.moved&&down.mode==='pan'){const A=actual(cv,viewS),[a,b]=P2D(down.x,down.y,A);setS(a,b);}down=null;});
+  cv.addEventListener('wheel',e=>{e.preventDefault();const r=cv.getBoundingClientRect(),A=actual(cv,viewS),[dx,dy]=P2D(e.clientX-r.left,e.clientY-r.top,A),f=e.deltaY>0?1.1:1/1.1;
+    viewS.x1min=dx-(dx-viewS.x1min)*f;viewS.x1max=dx+(viewS.x1max-dx)*f;viewS.x2min=dy-(dy-viewS.x2min)*f;viewS.x2max=dy+(viewS.x2max-dy)*f;
+    syncRangeFields();drawSPlane();},{passive:false});
+})();
+
+// --- time plot: drag to scrub ---
+(function(){
+  const cv=el('tstrip'); let down=false;
+  const setFromX=px=>{const w=cv.clientWidth,pL=46,pR=14,W=w-pL-pR;tScrub=clamp((px-pL)/W*(tPlot?tPlot.Tend:1),0,tPlot?tPlot.Tend:1);drawTime();updateReadouts();};
+  cv.addEventListener('mousedown',e=>{down=true;const r=cv.getBoundingClientRect();setFromX(e.clientX-r.left);});
+  window.addEventListener('mousemove',e=>{if(!down)return;const r=cv.getBoundingClientRect();setFromX(e.clientX-r.left);});
+  window.addEventListener('mouseup',()=>{down=false;});
+})();
+
+// --- reset view ---
+el('resetView').onclick=()=>{view3d.az=-0.62;view3d.el=0.44;view3d.zoom=1;view3d.panx=0;view3d.pany=0;drawSurface();};
+
+/* ================================================================
+   15. BOOT
+   ================================================================ */
+let rz=null;
+window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(redrawAll,90);});
+syncRangeFields();
+rebuild();
+</script>
+</body>
+</html>

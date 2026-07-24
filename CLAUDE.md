@@ -73,6 +73,10 @@ teaching artifact. The reference implementation is `demos/cruise-control/index.h
 - [x] Sum of Complex Exponentials (`demos/sum-of-exponentials/`) — build f(t) = Σ cₖe^{sₖt}
       from up to 8 complex phasors, watch them chain tip-to-tail in the complex plane (tip =
       f(t)) and trace Re/Im of f(t) in time; a conjugate pair sums to a real cosine (default).
+- [x] Laplace Transform Explorer (`demos/laplace/`) — type f(t); see F(s) as a hand-rolled 3-D
+      surface over the s-plane (height |F(s)|, color ∠F(s)) with a draggable floor cursor + a
+      linked 2-D s-plane; exact rational F(s) with true poles/ROC when f is an exp-polynomial,
+      numeric ∫₀ᵀ fallback otherwise; F(s) color-ring key + rect/polar readouts + poles/ROC box.
 - [ ] DC motor (position/speed control; V→current→torque).
 - [ ] Inverted pendulum / cart-pole (stabilization; nonlinear, great for state feedback).
 - [ ] Ball & beam.
@@ -113,7 +117,61 @@ Keep all of them on the same skeleton so students recognize the interface across
 
 Where we left off, so the conversation can be cleared and resumed later.
 
-### Status: Sum of Complex Exponentials is DONE + verified — NOT committed (newest work).
+### Status: Laplace Transform Explorer is DONE + verified — NOT committed (NEWEST work).
+- Files: `demos/laplace/index.html` (self-contained single file) and its landing-page card in
+  `index.html` (added, right after the Sum of Complex Exponentials card). Roadmap checkbox above
+  ticked. Live target once pushed: `https://danielbruder.com/me461-demos/demos/laplace/`.
+- Still uncommitted along with all prior uncommitted work. Standing rule: commit/push only when
+  asked; verify git state first (working dir may not be the git root).
+
+**Design decisions the user chose** (asked up front via multiple-choice):
+- **F(s) engine = HYBRID.** Exact closed-form when f(t) is an *exponential polynomial* (sums/
+  products of tⁿ, e^{at}, sin/cos/sinh/cosh of an affine arg) → rational F(s) with **true poles
+  & exact ROC**; otherwise **numeric** ∫₀ᵀ f(t)e^{−st}dt (Simpson) with an honest "ROC-limited"
+  warning + *estimated* abscissa (slope of ln|f| over the late window).
+- **f(0) = readout only** (no separate IC control). **Time plot = static + draggable scrubber.**
+- **Cursor s is the single source of truth**, draggable on the 3-D floor AND in the 2-D s-plane
+  (linked). The F(s) ring is a *driven* indicator (inverting F is multivalued/ill-posed — flagged
+  to the user). Told the user 3-D is hand-rolled (zero-dep rule bars three.js/plotly).
+
+**What it is.** Top = editable `f(t)` box (+ EXACT/NUMERIC pill, live f(0), duration T, Rebuild).
+Row: left = f(t) time plot w/ scrubber; right = the star, a **hand-rolled 3-D |F(s)| surface**
+over s=σ+jω (height=|F|, color=∠F via cyclic hue = "domain coloring"), draggable floor cursor +
+vertical line to the surface, tilt(drag)/pan(shift-drag)/zoom(wheel), pole spikes (×), ROC tint on
+the floor. Next row: 2-D **s-plane** inspector (draggable cursor, pole ×'s, ROC shading/boundary) +
+**F(s) value & phase-key ring** (hue annulus = ∠F color key; inner dot = F(s) with |F| radially
+compressed by (2/π)atan). Then rect+polar readouts for s and F(s), and a **poles & ROC** box.
+
+**Non-obvious plumbing.**
+- Symbolic core = an **exponential-polynomial algebra**: f is reduced to a sum of atoms
+  `c·tⁿ·e^{pt}` (c,p complex; n≥0). Closed under +,−,×, and under exp/sin/cos/sinh/cosh of an
+  **affine** argument a₀+a₁t (Euler expands sin/cos into e^{±j·}). `2^t` / `e^(at)` handled via
+  base^exp = exp(exp·ln base). Laplace{c tⁿ e^{pt}} = c·n!/(s−p)^{n+1} → poles = distinct p
+  (mult = max n+1), σ_a = max Re(p). Anything outside the class throws `SYMFAIL` → numeric.
+- One recursive-descent **parser** builds an AST used two ways: `toExpPoly` (symbolic) and
+  `evalNum` (complex AST walker, used for the time plot in BOTH modes and for numeric f_k). Supports
+  implicit multiplication (`3t`, `e^(-0.5t)cos(3t)`), `t e pi j/i`, `^` right-assoc.
+- 3-D is **orthographic** (az about vertical, el tilt); painter's algorithm sorts ~2100 quads by
+  depth each redraw; the floor plane (w=0) map is affine so screen→(σ,ω) picking inverts cleanly
+  (elevation clamped ≥ ~0.09 rad to stay non-singular). Height = min(|F|/scaleZ, capR)·HZ with
+  scaleZ = 72nd-percentile of grid |F| (poles clip to flat-topped mesas). No rAF loop — redraw on
+  interaction only. Reuses the siblings' `actual/D2P/P2D/drawGrid/niceStep` equal-aspect machinery.
+
+**Verified this session** (scratchpad, reusable): `node --check` clean; **26/26 logic asserts**
+(`test_logic.mjs` — L{1},{t},{t²},{e^{at}},{cos},{sin},{e^{at}cos},{t e^{-t}},{sinh}, linearity,
+poles/ROC, `2^t`→1/(s−ln2), SYMFAIL for 1/(t+1)/tan/sqrt/log, parser rejections, implicit-mult,
+and a crude numeric ∫ cross-check). Headless-Chrome (Chrome.app, no puppeteer, `--headless=new
+--screenshot`; **run ONE launch per Bash call with `--timeout=8000` — three sequential launches in
+one call hung**): default (exact e^{-0.5t}cos3t) renders the twin resonance peaks at −0.5±3j with
+F(0.5+1.5j)=0.177+0.125j (hand-checked ✓); a synchronous probe drove rotate/pan/zoom/setS/scrub +
+mode switches with **no JS errors**, and numeric 1/(t+1) gave F(2)=0.3613 = e²E₁(2) ✓.
+
+**One bug found & fixed this session:** the F(s) ring's angle *labels* were sign-flipped vs. the
+color wedges (π/2 showed at the bottom) — the label loop used cos(−a)/sin(−a); corrected to
+cos(a)/−sin(a) so labels sit over their matching hue. (Don't re-break: wedges/value-dot/ring-marker
+all use the (cosθ, −sinθ) screen mapping; labels must match.)
+
+### Status: Sum of Complex Exponentials is DONE + verified — NOT committed.
 - Files: `demos/sum-of-exponentials/index.html` (self-contained single file) and its
   landing-page card in `index.html` (added, right after the Complex Exponential card).
   Roadmap checkbox above is ticked. Live target once pushed:
