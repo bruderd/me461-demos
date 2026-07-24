@@ -140,9 +140,13 @@ Where we left off, so the conversation can be cleared and resumed later.
 (2fr/1fr) with the star — a **hand-rolled 3-D |F(s)| surface** (2/3, left) over s=σ+jω (height=|F|,
 color=∠F via cyclic hue = "domain coloring"), draggable floor cursor + vertical line, tilt(drag)/
 pan(shift-drag)/zoom(wheel), pole spikes (×), ROC tint on floor — beside a `.rcol` (right 1/3) that
-**stacks** the 2-D **s-plane** inspector (top; draggable cursor, **manual s = Re + Im j entry**,
-pole ×'s, ROC shading/boundary) over the **F(s) value plane** (bottom). Grid stretch makes the two
-right cards' combined height equal the surface's. Full-width **poles & ROC** box at the bottom.
+**stacks** the 2-D **s-plane** inspector (top; draggable cursor, **dual manual s entry — rectangular
+`s = a + bj` AND polar `= r·e^(θ j)`, kept in sync both ways via `syncCursorFields`**, its own **Reset
+view** button `#resetViewS`, pole ×'s, ROC shading/boundary) over the **F(s) value plane** (bottom).
+Grid stretch makes the two right cards' combined height equal the surface's. Full-width **poles & ROC**
+box at the bottom. (The old redundant `s (rect)`/`s (polar)` readout tiles were removed since the manual
+entry fields now show those; the poles box lists poles plainly with **no red `×` prefix**; the F(s) rect
+readout has **no colour swatch**.)
 - The **F(s) value plane** is a Cartesian F-plane (Re F / Im F axes + labeled gridlines that give
   the magnitudes) with a **hue-by-angle colour-wheel background** (the ∠F colour key, cached since
   it's scale-independent), the point F(s) with drop-lines to each axis; it auto-rescales (R =
@@ -182,6 +186,12 @@ canvas size (`fwKey`) and blitted each redraw. Landing the cursor exactly on a p
 — handled gracefully (no F-plane dot, readout shows ∞, surface height clamps to the cap).
 (An earlier phase-*ring* version had a sign-flipped angle-label bug; the ring was later replaced by
 the Cartesian F-plane, so that's moot now.)
+- **s-plane / F-plane canvases MUST use `flex:1 1 0` (basis 0), not `flex:1 1 auto`.** They have no
+  fixed CSS height and `fitDPR` sets their `height` *attribute* from `clientHeight·dpr` on every
+  redraw; with `flex-basis:auto` that attribute feeds back into the flex base size, so each
+  cursor-drag redraw grew the s-plane taller (a reported bug). Basis 0 makes the flex row (`.rcol`
+  grid `1fr 1fr`) the sole height source → stable. Verified: 60 `setS` calls leave `clientHeight`
+  pinned at 177px.
 
 ### Status: Sum of Complex Exponentials is DONE + verified — NOT committed.
 - Files: `demos/sum-of-exponentials/index.html` (self-contained single file) and its

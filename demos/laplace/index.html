@@ -70,7 +70,7 @@
   .lgrid>.card{margin-top:0}
   .rcol{display:grid;grid-template-rows:1fr 1fr;gap:16px;min-width:0}
   .rcol>.card{margin-top:0;display:flex;flex-direction:column}
-  .rcol>.card canvas{flex:1 1 auto;min-height:130px}
+  .rcol>.card canvas{flex:1 1 0;min-height:130px}   /* basis:0 — never size from the canvas's own (fitDPR-set) height, or it runs away on redraw */
   .tcanvas{background:linear-gradient(180deg,#0d2a52,#0a1830);height:220px;cursor:crosshair;touch-action:none}
   #surf{background:radial-gradient(120% 120% at 50% 40%,#0d2740,#080f1c);height:552px;cursor:grab;touch-action:none}
   #surf:active{cursor:grabbing}
@@ -90,13 +90,11 @@
   .ro{background:#0A1D38;border:1px solid rgba(138,166,198,.14);border-radius:8px;padding:6px 10px;min-width:0}
   .ro .k{font-family:var(--mono);font-size:9px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
   .ro .v{font-family:var(--mono);font-size:14px;font-weight:600;margin-top:2px}
-  .swatch{width:13px;height:13px;border-radius:3px;display:inline-block;vertical-align:-2px;margin-right:5px;border:1px solid rgba(255,255,255,.25)}
 
   /* ---- poles / ROC box ---- */
   .prow{display:grid;grid-template-columns:120px 1fr;gap:8px 14px;font-size:13px;align-items:baseline}
   .prow .pk{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;padding-top:2px}
   .prow .pv{font-family:var(--mono);font-size:13px;color:var(--ink);line-height:1.6}
-  .pv .x{color:var(--bad);font-weight:700}
 
   footer{color:var(--muted);font-size:12px;margin-top:16px;line-height:1.6}
   footer b{color:var(--ink);font-weight:600}
@@ -112,7 +110,7 @@
 
   <!-- ============ f(t) INPUT ============ -->
   <div class="card">
-    <h2>the signal <span class="m">f(t)</span>, for t ≥ 0 <span class="note">Laplace transform F(s) = ∫₀<sup>∞</sup> f(t) e<sup>−st</sup> dt</span></h2>
+    <h2>the signal <span class="m">f(t)</span>, for <span class="lc">t</span> ≥ 0 <span class="note">Laplace transform F(s) = ∫₀<sup>∞</sup> f(t) e<sup>−st</sup> dt</span></h2>
     <div class="fbar">
       <div class="grow">
         <label class="lbl" for="expr"><span class="lc">f(t) =</span></label>
@@ -161,23 +159,25 @@
         <h2>s-plane <span class="note">drag the cursor · scroll = zoom · drag background = pan</span></h2>
         <div class="axisrow">
           <span class="grp"><span class="al">s =</span>
-            <input id="csRe" type="number" step="any" style="width:76px">
+            <input id="csRe" type="number" step="any" style="width:60px">
             <span class="al">+</span>
-            <input id="csIm" type="number" step="any" style="width:76px">
+            <input id="csIm" type="number" step="any" style="width:60px">
             <span class="al">j</span></span>
+          <span class="grp"><span class="al">=</span>
+            <input id="csR" type="number" step="any" style="width:60px">
+            <span class="al">· e^(</span>
+            <input id="csTh" type="number" step="any" style="width:60px">
+            <span class="al">j)</span></span>
+          <button id="resetViewS" class="mini">Reset view</button>
         </div>
         <canvas id="splane"></canvas>
-        <div class="ros">
-          <div class="ro"><div class="k">s (rect)</div><div class="v" id="roSrect">—</div></div>
-          <div class="ro"><div class="k">s (polar)</div><div class="v" id="roSpol">—</div></div>
-        </div>
       </div>
 
       <div class="card">
         <h2><span class="m">F(s)</span> · value plane <span class="note">color = ∠F key · gridlines read Re F &amp; Im F</span></h2>
         <canvas id="fplane"></canvas>
         <div class="ros">
-          <div class="ro"><div class="k">F(s) (rect)</div><div class="v"><span class="swatch" id="fSwatch"></span><span id="roFrect">—</span></div></div>
+          <div class="ro"><div class="k">F(s) (rect)</div><div class="v"><span id="roFrect">—</span></div></div>
           <div class="ro"><div class="k">F(s) (polar)</div><div class="v" id="roFpol">—</div></div>
         </div>
       </div>
@@ -816,13 +816,9 @@ function tline(ctx,ts,arr,X,Y,color){
    12. READOUTS
    ================================================================ */
 function updateReadouts(){
-  el('roSrect').textContent=fmtC(sc[0],sc[1]);
-  const rS=Math.hypot(sc[0],sc[1]),thS=Math.atan2(sc[1],sc[0]);
-  el('roSpol').textContent=`${fmt3(rS)} · e^(${fmt3(thS)}j)`;
   const F=model?model.Fval(sc[0],sc[1]):[0,0], rF=cabs(F), thF=carg(F);
   el('roFrect').textContent=fmtC(F[0],F[1]);
   el('roFpol').textContent=`${fmt3(rF)} · e^(${fmt3(thF)}j)`;
-  el('fSwatch').style.background=phaseCSS(thF,55);
   // time readouts
   el('roT').textContent=fmt3(tScrub);
   if(model){const fv=evalNum(model.ast,tScrub);el('roFt').textContent=fmtC(fv[0],fv[1]);}
@@ -834,7 +830,7 @@ function updatePolesBox(){
     el('pvFs').innerHTML='rational — exact (sum of t<sup>n</sup>e<sup>at</sup>·sinusoid terms)';
     if(!model.poles.length){el('pvPoles').innerHTML='none (F(s) ≡ 0)';el('pvRoc').textContent='all s';return;}
     const parts=model.poles.map(pl=>{const s='s = '+fmtC(pl.p[0],pl.p[1]);return s+(pl.m>1?' (order '+pl.m+')':'');});
-    el('pvPoles').innerHTML=parts.map(p=>'<span class="x">×</span> '+p).join('&nbsp;&nbsp; ');
+    el('pvPoles').innerHTML=parts.join('&nbsp;&nbsp;·&nbsp;&nbsp;');
     el('pvRoc').innerHTML='Re(s) &gt; '+fmt3(model.sigmaA)+' &nbsp;<span style="color:var(--good)">(right of the rightmost pole)</span>';
   }else{
     el('pvFs').innerHTML='numeric — ∫₀<sup>T='+fmt3(model.T)+'</sup> f(t) e<sup>−st</sup> dt (ROC-limited)';
@@ -882,15 +878,23 @@ el('expr').addEventListener('keydown',e=>{if(e.key==='Enter')rebuild();});
 el('T').addEventListener('change',rebuild);
 // --- surface range fields ---
 function syncRangeFields(){el('sMin').value=srange.sMin;el('sMax').value=srange.sMax;el('wMin').value=srange.wMin;el('wMax').value=srange.wMax;}
-function syncCursorFields(){el('csRe').value=+sc[0].toFixed(4);el('csIm').value=+sc[1].toFixed(4);}
+function syncCursorFields(){                          // keep both rect + polar s-entries in step with the cursor
+  el('csRe').value=+sc[0].toFixed(4); el('csIm').value=+sc[1].toFixed(4);
+  el('csR').value=+Math.hypot(sc[0],sc[1]).toFixed(4); el('csTh').value=+Math.atan2(sc[1],sc[0]).toFixed(4);
+}
 ['sMin','sMax','wMin','wMax'].forEach(id=>el(id).addEventListener('change',()=>{
   const a=parseFloat(el('sMin').value),b=parseFloat(el('sMax').value),c=parseFloat(el('wMin').value),d=parseFloat(el('wMax').value);
   if(isFinite(a)&&isFinite(b)&&b>a){srange.sMin=a;srange.sMax=b;} if(isFinite(c)&&isFinite(d)&&d>c){srange.wMin=c;srange.wMax=d;}
   buildSurface();redrawAll();}));
-// manual s entry (in addition to dragging either cursor)
+// manual s entry — rectangular a + bj, in addition to dragging either cursor
 ['csRe','csIm'].forEach(id=>el(id).addEventListener('change',()=>{
   const a=parseFloat(el('csRe').value),b=parseFloat(el('csIm').value);
   if(isFinite(a)&&isFinite(b)) setS(a,b);
+}));
+// manual s entry — polar r·e^(θ j)
+['csR','csTh'].forEach(id=>el(id).addEventListener('change',()=>{
+  const r=parseFloat(el('csR').value),th=parseFloat(el('csTh').value);
+  if(isFinite(r)&&isFinite(th)) setS(r*Math.cos(th),r*Math.sin(th));
 }));
 
 // --- surface: tilt / pan / zoom / drag floor cursor ---
@@ -943,8 +947,10 @@ function syncCursorFields(){el('csRe').value=+sc[0].toFixed(4);el('csIm').value=
   window.addEventListener('mouseup',()=>{down=false;});
 })();
 
-// --- reset view ---
+// --- reset view (surface + s-plane) ---
+const viewSdef={x1min:-3,x1max:2,x2min:-6,x2max:6};
 el('resetView').onclick=()=>{view3d.az=-0.62;view3d.el=0.44;view3d.zoom=1;view3d.panx=0;view3d.pany=0;drawSurface();};
+el('resetViewS').onclick=()=>{Object.assign(viewS,viewSdef);drawSPlane();};
 
 /* ================================================================
    15. BOOT
