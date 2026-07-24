@@ -30,6 +30,7 @@
            color:var(--muted);margin:0 0 10px;font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .card h2 .note{font-family:var(--sans);letter-spacing:0;text-transform:none;font-size:11px;color:var(--muted);font-weight:400}
   .card h2 .m{text-transform:none;letter-spacing:.02em;font-size:12px}
+  .lc{text-transform:none}                              /* keep σ, ω, f(t) lowercase inside uppercased labels/titles */
   canvas{display:block;width:100%;border-radius:8px}
 
   input[type=text],input[type=number]{background:#08182f;color:#cfe3ff;border:1px solid rgba(138,166,198,.2);
@@ -63,11 +64,18 @@
 
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media(max-width:900px){.grid{grid-template-columns:1fr}}
-  .tcanvas{background:linear-gradient(180deg,#0d2a52,#0a1830);height:230px;cursor:crosshair;touch-action:none}
-  #surf{background:radial-gradient(120% 120% at 50% 40%,#0d2740,#080f1c);height:430px;cursor:grab;touch-action:none}
+  /* main Laplace layout: |F(s)| surface 2/3 (left), inspector stack 1/3 (right) */
+  .lgrid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-top:16px;align-items:stretch}
+  @media(max-width:900px){.lgrid{grid-template-columns:1fr}}
+  .lgrid>.card{margin-top:0}
+  .rcol{display:grid;grid-template-rows:1fr 1fr;gap:16px;min-width:0}
+  .rcol>.card{margin-top:0;display:flex;flex-direction:column}
+  .rcol>.card canvas{flex:1 1 auto;min-height:130px}
+  .tcanvas{background:linear-gradient(180deg,#0d2a52,#0a1830);height:220px;cursor:crosshair;touch-action:none}
+  #surf{background:radial-gradient(120% 120% at 50% 40%,#0d2740,#080f1c);height:552px;cursor:grab;touch-action:none}
   #surf:active{cursor:grabbing}
-  #splane{background:radial-gradient(120% 120% at 50% 45%,#0d2a52,#0a1830);height:300px;cursor:crosshair;touch-action:none}
-  #ring{background:radial-gradient(120% 120% at 50% 50%,#0d2740,#0a1526);height:300px;touch-action:none}
+  #splane{background:radial-gradient(120% 120% at 50% 45%,#0d2a52,#0a1830);cursor:crosshair;touch-action:none}
+  #fplane{background:#0a1526;cursor:crosshair;touch-action:none}
 
   .axisrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 9px;min-height:30px}
   .axisrow .grp{display:flex;align-items:center;gap:4px}
@@ -107,7 +115,7 @@
     <h2>the signal <span class="m">f(t)</span>, for t ≥ 0 <span class="note">Laplace transform F(s) = ∫₀<sup>∞</sup> f(t) e<sup>−st</sup> dt</span></h2>
     <div class="fbar">
       <div class="grow">
-        <label class="lbl" for="expr">f(t) =</label>
+        <label class="lbl" for="expr"><span class="lc">f(t) =</span></label>
         <input id="expr" type="text" spellcheck="false" value="e^(-0.5t)*cos(3t)">
       </div>
       <div class="field"><span class="k">mode</span><span id="modePill" class="pill exact">EXACT</span></div>
@@ -118,25 +126,25 @@
     <div class="hint" id="hint">
       Build from <code>t</code>, <code>e</code>, <code>pi</code>, <code>j</code> and <code>+ − * / ^</code> with
       <code>exp sin cos sinh cosh</code> (poly×exp×sinusoid → <b>exact</b> F(s) with true poles &amp; ROC).
-      Anything else (<code>tan sqrt log abs</code>, <code>1/(t+1)</code>, …) falls back to <b>numeric</b> integration.
+      Anything else (<code>tan</code>, <code>sqrt</code>, <code>log</code>, <code>abs</code>, <code>1/(t+1)</code>, …) is approximated using numerical integration.
     </div>
   </div>
 
-  <!-- ============ TIME DOMAIN + SURFACE ============ -->
-  <div class="grid">
-    <!-- LEFT: f(t) -->
-    <div class="card">
-      <h2><span class="m">f(t)</span> · time domain <span class="note">drag the plot to scrub</span></h2>
-      <canvas id="tstrip" class="tcanvas"></canvas>
-      <div class="ros">
-        <div class="ro"><div class="k">t</div><div class="v" id="roT">—</div></div>
-        <div class="ro"><div class="k">f(t)</div><div class="v" id="roFt">—</div></div>
-      </div>
+  <!-- ============ f(t) TIME DOMAIN (full width) ============ -->
+  <div class="card">
+    <h2><span class="m">f(t)</span> · time domain <span class="note">drag the plot to scrub</span></h2>
+    <canvas id="tstrip" class="tcanvas"></canvas>
+    <div class="ros">
+      <div class="ro"><div class="k">t</div><div class="v" id="roT">—</div></div>
+      <div class="ro"><div class="k">f(t)</div><div class="v" id="roFt">—</div></div>
     </div>
+  </div>
 
-    <!-- RIGHT: |F(s)| surface -->
+  <!-- ============ LAPLACE: |F(s)| surface (2/3) + inspector stack (1/3) ============ -->
+  <div class="lgrid">
+    <!-- LEFT: the surface -->
     <div class="card">
-      <h2><span class="m">|F(s)|</span> surface over s = σ + jω
+      <h2><span class="m">|F(s)|</span> surface over s = <span class="lc">σ</span> + j<span class="lc">ω</span>
           <span class="note">drag = tilt · shift-drag = pan · wheel = zoom · drag cursor on floor = move s</span></h2>
       <div class="axisrow">
         <span class="grp"><span class="al">σ</span><input id="sMin" type="number" step="any" value="-3"><input id="sMax" type="number" step="any" value="2"></span>
@@ -144,33 +152,34 @@
         <button id="resetView" class="mini">Reset view</button>
       </div>
       <canvas id="surf"></canvas>
-      <div class="status" id="surfStatus">height = |F(s)| · color = ∠F(s) · vertical line marks the cursor s.</div>
-    </div>
-  </div>
-
-  <!-- ============ INSPECTOR: s-plane + F(s) value/phase ============ -->
-  <div class="grid">
-    <!-- s-plane -->
-    <div class="card">
-      <h2>s-plane <span class="note">drag the cursor · scroll = zoom · drag background = pan</span></h2>
-      <div class="axisrow">
-        <span class="grp"><span class="al">Re s</span><input id="pRe0" type="number" step="any"><input id="pRe1" type="number" step="any"></span>
-        <span class="grp"><span class="al">Im s</span><input id="pIm0" type="number" step="any"><input id="pIm1" type="number" step="any"></span>
-      </div>
-      <canvas id="splane"></canvas>
-      <div class="ros">
-        <div class="ro"><div class="k">s (rect)</div><div class="v" id="roSrect">—</div></div>
-        <div class="ro"><div class="k">s (polar)</div><div class="v" id="roSpol">—</div></div>
-      </div>
+      <div class="status" id="surfStatus">height = |F(s)| · color = ∠F(s) · drag the floor cursor to move s.</div>
     </div>
 
-    <!-- F(s) value + phase key -->
-    <div class="card">
-      <h2><span class="m">F(s)</span> · value &amp; phase key <span class="note">ring = ∠F color key · dot = F(s) (|F| radially compressed)</span></h2>
-      <canvas id="ring"></canvas>
-      <div class="ros">
-        <div class="ro"><div class="k">F(s) (rect)</div><div class="v"><span class="swatch" id="fSwatch"></span><span id="roFrect">—</span></div></div>
-        <div class="ro"><div class="k">F(s) (polar)</div><div class="v" id="roFpol">—</div></div>
+    <!-- RIGHT: stacked inspector — s-plane (top) over F(s) value plane (bottom) -->
+    <div class="rcol">
+      <div class="card">
+        <h2>s-plane <span class="note">drag the cursor · scroll = zoom · drag background = pan</span></h2>
+        <div class="axisrow">
+          <span class="grp"><span class="al">s =</span>
+            <input id="csRe" type="number" step="any" style="width:76px">
+            <span class="al">+</span>
+            <input id="csIm" type="number" step="any" style="width:76px">
+            <span class="al">j</span></span>
+        </div>
+        <canvas id="splane"></canvas>
+        <div class="ros">
+          <div class="ro"><div class="k">s (rect)</div><div class="v" id="roSrect">—</div></div>
+          <div class="ro"><div class="k">s (polar)</div><div class="v" id="roSpol">—</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="m">F(s)</span> · value plane <span class="note">color = ∠F key · gridlines read Re F &amp; Im F</span></h2>
+        <canvas id="fplane"></canvas>
+        <div class="ros">
+          <div class="ro"><div class="k">F(s) (rect)</div><div class="v"><span class="swatch" id="fSwatch"></span><span id="roFrect">—</span></div></div>
+          <div class="ro"><div class="k">F(s) (polar)</div><div class="v" id="roFpol">—</div></div>
+        </div>
       </div>
     </div>
   </div>
@@ -529,7 +538,7 @@ function buildSurface(){
       mag[i*G+j]=m; ph[i*G+j]=carg(F); if(isFinite(m)) fin.push(m); }}
   fin.sort((a,b)=>a-b);
   const scaleZ=Math.max(quantile(fin,0.72),1e-9);     // typical value → mid height
-  surf={G,mag,ph,scaleZ,capR:2.4,HZ:0.55};            // model height = min(|F|/scaleZ,capR)·HZ
+  surf={G,mag,ph,scaleZ,capR:6.0,HZ:0.30};            // height = min(|F|/scaleZ,capR)·HZ — big capR ⇒ tall, spiky poles
 }
 const heightModel=m=>Math.min((isFinite(m)?m:1e9)/surf.scaleZ, surf.capR)*surf.HZ;
 
@@ -563,7 +572,7 @@ function drawSurface(){
   ctx.clearRect(0,0,w,h);
   if(!surf){return;}
   const S=Math.min(w,h)*0.33;
-  PJ={CX:w*0.5, CY:h*0.70, S, zoom:view3d.zoom, panx:view3d.panx, pany:view3d.pany,
+  PJ={CX:w*0.5, CY:h*0.72, S, zoom:view3d.zoom, panx:view3d.panx, pany:view3d.pany,
       ca:Math.cos(view3d.az), sa:Math.sin(view3d.az), ce:Math.cos(view3d.el), se:Math.max(0.09,Math.sin(view3d.el))};
   PJ.S=S*view3d.zoom;
 
@@ -696,42 +705,54 @@ function drawSPlane(){
 }
 
 /* ================================================================
-   10. RENDER — F(s) value + phase-color ring key
+   10. RENDER — F(s) value plane (Cartesian F-plane with a hue-by-angle
+       colour-wheel background that doubles as the ∠F colour key)
    ================================================================ */
-function drawRing(){
-  const cv=el('ring'); const {ctx,w,h}=fitDPR(cv);
+function hslToRgb(h,s,l){                              // h,s,l in [0,1] → [r,g,b]
+  if(s===0){const v=Math.round(l*255);return [v,v,v];}
+  const q=l<0.5?l*(1+s):l+s-l*s, p=2*l-q;
+  const f=t=>{if(t<0)t+=1;if(t>1)t-=1;if(t<1/6)return p+(q-p)*6*t;if(t<0.5)return q;if(t<2/3)return p+(q-p)*(2/3-t)*6;return p;};
+  return [Math.round(f(h+1/3)*255),Math.round(f(h)*255),Math.round(f(h-1/3)*255)];
+}
+function niceCeil(x){if(!(x>0))return 1;const p=Math.pow(10,Math.floor(Math.log10(x))),n=x/p;return (n<=1?1:n<=2?2:n<=5?5:10)*p;}
+const pickR=m=>Math.max(niceCeil((isFinite(m)?m:1)*1.5),0.1);
+const fwheel=document.createElement('canvas'); let fwKey='';
+function buildWheel(w,h){                               // hue = direction from centre (scale-independent ⇒ cache it)
+  w=Math.max(1,Math.round(w)); h=Math.max(1,Math.round(h)); fwheel.width=w; fwheel.height=h;
+  const ctx=fwheel.getContext('2d'), img=ctx.createImageData(w,h), d=img.data, cx=w/2, cy=h/2;
+  for(let py=0;py<h;py++)for(let px=0;px<w;px++){
+    const ang=Math.atan2(cy-py,px-cx), rgb=hslToRgb(phaseHue(ang)/360,0.5,0.4), i=(py*w+px)*4;
+    d[i]=rgb[0];d[i+1]=rgb[1];d[i+2]=rgb[2];d[i+3]=255;}
+  ctx.putImageData(img,0,0);
+}
+function drawFplane(){
+  const cv=el('fplane'); const {ctx,w,h}=fitDPR(cv);
   ctx.clearRect(0,0,w,h);
-  const cx=w/2, cy=h/2, Ro=Math.min(w,h)*0.44, Ri=Ro*0.80;
-  // hue key annulus
-  const seg=90;
-  for(let k=0;k<seg;k++){ const a0=k/seg*2*Math.PI, a1=(k+1)/seg*2*Math.PI, mid=(a0+a1)/2;
-    ctx.beginPath();ctx.arc(cx,cy,Ro,-a1,-a0,false);ctx.arc(cx,cy,Ri,-a0,-a1,true);ctx.closePath();
-    ctx.fillStyle=`hsl(${phaseHue(mid).toFixed(0)},72%,52%)`;ctx.fill(); }
-  // phase tick labels
-  ctx.fillStyle='rgba(234,241,251,.7)';ctx.font='10px ui-monospace,monospace';ctx.textAlign='center';
-  const labs=[['0',0],['π/2',Math.PI/2],['±π',Math.PI],['−π/2',-Math.PI/2]];
-  for(const [t,a] of labs){const rr=Ro+11;ctx.fillText(t,cx+rr*Math.cos(a),cy-rr*Math.sin(a)+3);}
-  ctx.textAlign='left';
-  // inner value plane: axes + compressed magnitude rings
-  ctx.save();ctx.beginPath();ctx.arc(cx,cy,Ri-2,0,7);ctx.clip();
-  ctx.strokeStyle='rgba(138,166,198,.25)';ctx.lineWidth=1;
-  ctx.beginPath();ctx.moveTo(cx-Ri,cy);ctx.lineTo(cx+Ri,cy);ctx.moveTo(cx,cy-Ri);ctx.lineTo(cx,cy+Ri);ctx.stroke();
-  for(const q of [0.33,0.66]){ctx.beginPath();ctx.arc(cx,cy,(Ri-2)*q,0,7);ctx.setLineDash([3,4]);ctx.stroke();ctx.setLineDash([]);}
-  // F(s) dot: angle = ∠F, radius = compressed |F|  (rr = (2/π)atan(|F|/scale))
+  const key=Math.round(w)+'x'+Math.round(h); if(fwKey!==key){buildWheel(w,h);fwKey=key;}
+  ctx.drawImage(fwheel,0,0,w,h);
+  ctx.fillStyle='rgba(8,17,31,.34)'; ctx.fillRect(0,0,w,h);          // knock the wheel back so lines/point read
   const F=model?model.Fval(sc[0],sc[1]):[0,0], m=cabs(F), th=carg(F);
-  const scaleRef=surf?surf.scaleZ:1;
-  const rr=(2/Math.PI)*Math.atan(m/(scaleRef||1))*(Ri-4);
-  const dx=cx+rr*Math.cos(-th), dy=cy+rr*Math.sin(-th);   // canvas y down
-  ctx.strokeStyle='rgba(234,241,251,.5)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(dx,dy);ctx.stroke();
-  ctx.restore();
-  // marker on the ring at ∠F (the key readout)
-  const nx=cx+(Ro+Ri)/2*Math.cos(-th), ny=cy+(Ro+Ri)/2*Math.sin(-th);
-  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(nx,ny,4,0,7);ctx.fill();
-  ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.stroke();
-  // the value dot
-  ctx.shadowColor='#fff';ctx.shadowBlur=8;ctx.fillStyle=phaseCSS(th,58);
-  ctx.beginPath();ctx.arc(dx,dy,5,0,7);ctx.fill();ctx.shadowBlur=0;
-  ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(dx,dy,5,0,7);ctx.stroke();
+  const cx=w/2, cy=h/2, R=pickR(m), scpx=Math.min(w,h)*0.42/R, step=niceStep(2*R,6);
+  // Cartesian gridlines (their numbers give the magnitudes of Re F and Im F)
+  ctx.font='9px ui-monospace,monospace';
+  for(let x=Math.ceil(-R/step)*step;x<=R+1e-9;x+=step){ if(Math.abs(x)<1e-9)continue; const px=cx+x*scpx;
+    ctx.strokeStyle='rgba(234,241,251,.13)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,4);ctx.lineTo(px,h-4);ctx.stroke();
+    ctx.fillStyle='rgba(234,241,251,.55)';ctx.fillText(fmtTick(x),px+2,cy-3);}
+  for(let y=Math.ceil(-R/step)*step;y<=R+1e-9;y+=step){ if(Math.abs(y)<1e-9)continue; const py=cy-y*scpx;
+    ctx.strokeStyle='rgba(234,241,251,.13)';ctx.beginPath();ctx.moveTo(4,py);ctx.lineTo(w-4,py);ctx.stroke();
+    ctx.fillStyle='rgba(234,241,251,.55)';ctx.fillText(fmtTick(y),cx+3,py-2);}
+  ctx.strokeStyle='rgba(234,241,251,.5)';ctx.lineWidth=1.3;
+  ctx.beginPath();ctx.moveTo(4,cy);ctx.lineTo(w-4,cy);ctx.moveTo(cx,4);ctx.lineTo(cx,h-4);ctx.stroke();
+  ctx.fillStyle='rgba(234,241,251,.75)';ctx.font='10px ui-monospace,monospace';
+  ctx.fillText('Re F',w-34,cy-5); ctx.fillText('Im F',cx+5,12);
+  // F(s): drop-lines to each axis (read Re F & Im F), radial line, dot
+  const dx=cx+F[0]*scpx, dy=cy-F[1]*scpx;
+  ctx.save();ctx.strokeStyle='rgba(255,255,255,.45)';ctx.setLineDash([3,3]);ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(dx,dy);ctx.lineTo(dx,cy);ctx.moveTo(dx,dy);ctx.lineTo(cx,dy);ctx.stroke();ctx.restore();
+  ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(dx,dy);ctx.stroke();
+  ctx.shadowColor='#fff';ctx.shadowBlur=9;ctx.fillStyle=phaseCSS(th,58);
+  ctx.beginPath();ctx.arc(dx,dy,5.5,0,7);ctx.fill();ctx.shadowBlur=0;
+  ctx.strokeStyle='#fff';ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(dx,dy,5.5,0,7);ctx.stroke();
 }
 
 /* ================================================================
@@ -805,6 +826,7 @@ function updateReadouts(){
   // time readouts
   el('roT').textContent=fmt3(tScrub);
   if(model){const fv=evalNum(model.ast,tScrub);el('roFt').textContent=fmtC(fv[0],fv[1]);}
+  syncCursorFields();
 }
 function updatePolesBox(){
   if(!model||!model.ok){el('pvFs').textContent='—';el('pvPoles').textContent='—';el('pvRoc').textContent='—';return;}
@@ -828,10 +850,14 @@ function setMode(m,msg){
   const pill=el('modePill');
   pill.className='pill '+(m==='exact'?'exact':m==='numeric'?'numeric':'err');
   pill.textContent=m.toUpperCase();
-  el('surfStatus').className='status'+(m==='numeric'?' warn':'');
-  el('surfStatus').textContent = m==='numeric'
-    ? 'Numeric mode: F(s) ≈ ∫₀ᵀ f(t)e⁻ˢᵗdt — only valid right of the dashed abscissa; poles not identified.'
-    : (m==='err' ? ('⚠ '+msg) : 'height = |F(s)| · color = ∠F(s) · vertical line marks the cursor s.');
+  if(m==='err'){ el('surfStatus').className='status warn'; el('surfStatus').textContent='⚠ '+msg; }
+}
+function updateSurfStatus(){
+  const s=el('surfStatus'); if(!model||!model.ok) return;
+  if(model.mode==='numeric'){ s.className='status warn';
+    s.textContent='Numeric mode: F(s) ≈ ∫₀ᵀ f(t)e⁻ˢᵗdt — only valid right of the dashed abscissa; poles not identified.'; }
+  else { s.className='status';
+    s.textContent='height = |F(s)|, clipped at |F| = '+(surf?fmt3(surf.capR*surf.scaleZ):'—')+' · color = ∠F(s) · drag the floor cursor to move s.'; }
 }
 function rebuild(){
   const m=buildModel();
@@ -842,8 +868,8 @@ function rebuild(){
   setMode(model.mode);
   buildSurface(); buildTimePlot(); redrawAll();
 }
-function redrawAll(){ drawSurface(); drawSPlane(); drawRing(); drawTime(); updateReadouts(); updatePolesBox(); }
-function cursorUpdate(){ drawSurface(); drawSPlane(); drawRing(); updateReadouts(); }
+function redrawAll(){ updateSurfStatus(); drawSurface(); drawSPlane(); drawFplane(); drawTime(); updateReadouts(); updatePolesBox(); }
+function cursorUpdate(){ drawSurface(); drawSPlane(); drawFplane(); updateReadouts(); }
 function setS(re,im){ sc=[re,im]; cursorUpdate(); }
 
 /* ================================================================
@@ -855,16 +881,17 @@ el('expr').addEventListener('change',rebuild);
 el('expr').addEventListener('keydown',e=>{if(e.key==='Enter')rebuild();});
 el('T').addEventListener('change',rebuild);
 // --- surface range fields ---
-function syncRangeFields(){el('sMin').value=srange.sMin;el('sMax').value=srange.sMax;el('wMin').value=srange.wMin;el('wMax').value=srange.wMax;
-  el('pRe0').value=+viewS.x1min.toFixed(2);el('pRe1').value=+viewS.x1max.toFixed(2);el('pIm0').value=+viewS.x2min.toFixed(2);el('pIm1').value=+viewS.x2max.toFixed(2);}
+function syncRangeFields(){el('sMin').value=srange.sMin;el('sMax').value=srange.sMax;el('wMin').value=srange.wMin;el('wMax').value=srange.wMax;}
+function syncCursorFields(){el('csRe').value=+sc[0].toFixed(4);el('csIm').value=+sc[1].toFixed(4);}
 ['sMin','sMax','wMin','wMax'].forEach(id=>el(id).addEventListener('change',()=>{
   const a=parseFloat(el('sMin').value),b=parseFloat(el('sMax').value),c=parseFloat(el('wMin').value),d=parseFloat(el('wMax').value);
   if(isFinite(a)&&isFinite(b)&&b>a){srange.sMin=a;srange.sMax=b;} if(isFinite(c)&&isFinite(d)&&d>c){srange.wMin=c;srange.wMax=d;}
   buildSurface();redrawAll();}));
-function axisHandler(ids,v,after){ids.forEach(id=>el(id).addEventListener('change',()=>{
-  const a=parseFloat(el(ids[0]).value),b=parseFloat(el(ids[1]).value),c=parseFloat(el(ids[2]).value),d=parseFloat(el(ids[3]).value);
-  if(isFinite(a)&&isFinite(b)&&b>a){v.x1min=a;v.x1max=b;} if(isFinite(c)&&isFinite(d)&&d>c){v.x2min=c;v.x2max=d;} after();}));}
-axisHandler(['pRe0','pRe1','pIm0','pIm1'],viewS,()=>drawSPlane());
+// manual s entry (in addition to dragging either cursor)
+['csRe','csIm'].forEach(id=>el(id).addEventListener('change',()=>{
+  const a=parseFloat(el('csRe').value),b=parseFloat(el('csIm').value);
+  if(isFinite(a)&&isFinite(b)) setS(a,b);
+}));
 
 // --- surface: tilt / pan / zoom / drag floor cursor ---
 (function(){
@@ -900,11 +927,11 @@ axisHandler(['pRe0','pRe1','pIm0','pIm1'],viewS,()=>drawSPlane());
     if(down.mode==='marker'){const [a,b]=P2D(x,y,A);setS(a,b);}
     else if(down.moved){const dx=x-down.lx,dy=y-down.ly,rx=viewS.x1max-viewS.x1min,ry=viewS.x2max-viewS.x2min;
       viewS.x1min-=dx/A.M.W*rx;viewS.x1max-=dx/A.M.W*rx;viewS.x2min+=dy/A.M.H*ry;viewS.x2max+=dy/A.M.H*ry;
-      down.lx=x;down.ly=y;syncRangeFields();drawSPlane();}});
+      down.lx=x;down.ly=y;drawSPlane();}});
   window.addEventListener('mouseup',()=>{if(down&&!down.moved&&down.mode==='pan'){const A=actual(cv,viewS),[a,b]=P2D(down.x,down.y,A);setS(a,b);}down=null;});
   cv.addEventListener('wheel',e=>{e.preventDefault();const r=cv.getBoundingClientRect(),A=actual(cv,viewS),[dx,dy]=P2D(e.clientX-r.left,e.clientY-r.top,A),f=e.deltaY>0?1.1:1/1.1;
     viewS.x1min=dx-(dx-viewS.x1min)*f;viewS.x1max=dx+(viewS.x1max-dx)*f;viewS.x2min=dy-(dy-viewS.x2min)*f;viewS.x2max=dy+(viewS.x2max-dy)*f;
-    syncRangeFields();drawSPlane();},{passive:false});
+    drawSPlane();},{passive:false});
 })();
 
 // --- time plot: drag to scrub ---

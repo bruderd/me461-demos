@@ -76,7 +76,8 @@ teaching artifact. The reference implementation is `demos/cruise-control/index.h
 - [x] Laplace Transform Explorer (`demos/laplace/`) — type f(t); see F(s) as a hand-rolled 3-D
       surface over the s-plane (height |F(s)|, color ∠F(s)) with a draggable floor cursor + a
       linked 2-D s-plane; exact rational F(s) with true poles/ROC when f is an exp-polynomial,
-      numeric ∫₀ᵀ fallback otherwise; F(s) color-ring key + rect/polar readouts + poles/ROC box.
+      numeric ∫₀ᵀ fallback otherwise; F(s) Cartesian value plane (hue-wheel = ∠F key) + rect/polar
+      readouts + poles/ROC box.
 - [ ] DC motor (position/speed control; V→current→torque).
 - [ ] Inverted pendulum / cart-pole (stabilization; nonlinear, great for state feedback).
 - [ ] Ball & beam.
@@ -135,12 +136,20 @@ Where we left off, so the conversation can be cleared and resumed later.
   to the user). Told the user 3-D is hand-rolled (zero-dep rule bars three.js/plotly).
 
 **What it is.** Top = editable `f(t)` box (+ EXACT/NUMERIC pill, live f(0), duration T, Rebuild).
-Row: left = f(t) time plot w/ scrubber; right = the star, a **hand-rolled 3-D |F(s)| surface**
-over s=σ+jω (height=|F|, color=∠F via cyclic hue = "domain coloring"), draggable floor cursor +
-vertical line to the surface, tilt(drag)/pan(shift-drag)/zoom(wheel), pole spikes (×), ROC tint on
-the floor. Next row: 2-D **s-plane** inspector (draggable cursor, pole ×'s, ROC shading/boundary) +
-**F(s) value & phase-key ring** (hue annulus = ∠F color key; inner dot = F(s) with |F| radially
-compressed by (2/π)atan). Then rect+polar readouts for s and F(s), and a **poles & ROC** box.
+**Layout** (revised per user): full-width **f(t) time plot** w/ scrubber on top; then a `.lgrid`
+(2fr/1fr) with the star — a **hand-rolled 3-D |F(s)| surface** (2/3, left) over s=σ+jω (height=|F|,
+color=∠F via cyclic hue = "domain coloring"), draggable floor cursor + vertical line, tilt(drag)/
+pan(shift-drag)/zoom(wheel), pole spikes (×), ROC tint on floor — beside a `.rcol` (right 1/3) that
+**stacks** the 2-D **s-plane** inspector (top; draggable cursor, **manual s = Re + Im j entry**,
+pole ×'s, ROC shading/boundary) over the **F(s) value plane** (bottom). Grid stretch makes the two
+right cards' combined height equal the surface's. Full-width **poles & ROC** box at the bottom.
+- The **F(s) value plane** is a Cartesian F-plane (Re F / Im F axes + labeled gridlines that give
+  the magnitudes) with a **hue-by-angle colour-wheel background** (the ∠F colour key, cached since
+  it's scale-independent), the point F(s) with drop-lines to each axis; it auto-rescales (R =
+  niceCeil(1.5|F|)). (Replaced an earlier phase *ring*; the ring is gone.)
+- Height clip: model height = min(|F|/scaleZ, capR)·HZ with **scaleZ = 72nd-pct of grid |F|,
+  capR=6, HZ=0.30** → poles tower as tall spikes clipped at |F| = capR·scaleZ (shown in the status).
+  (User asked for taller poles; raised from capR=2.4.)
 
 **Non-obvious plumbing.**
 - Symbolic core = an **exponential-polynomial algebra**: f is reduced to a sum of atoms
@@ -166,10 +175,13 @@ one call hung**): default (exact e^{-0.5t}cos3t) renders the twin resonance peak
 F(0.5+1.5j)=0.177+0.125j (hand-checked ✓); a synchronous probe drove rotate/pan/zoom/setS/scrub +
 mode switches with **no JS errors**, and numeric 1/(t+1) gave F(2)=0.3613 = e²E₁(2) ✓.
 
-**One bug found & fixed this session:** the F(s) ring's angle *labels* were sign-flipped vs. the
-color wedges (π/2 showed at the bottom) — the label loop used cos(−a)/sin(−a); corrected to
-cos(a)/−sin(a) so labels sit over their matching hue. (Don't re-break: wedges/value-dot/ring-marker
-all use the (cosθ, −sinθ) screen mapping; labels must match.)
+**Known gotchas already handled (don't re-break):** σ/ω are uppercased by the `.card h2` / `.lbl`
+`text-transform` → wrap them (and the `f(t)` label) in `.lc{text-transform:none}` — that's why the
+surface title reads "σ + jω" and the input label reads "f(t)". The F-plane hue wheel is cached by
+canvas size (`fwKey`) and blitted each redraw. Landing the cursor exactly on a pole gives |F|=∞/NaN
+— handled gracefully (no F-plane dot, readout shows ∞, surface height clamps to the cap).
+(An earlier phase-*ring* version had a sign-flipped angle-label bug; the ring was later replaced by
+the Cartesian F-plane, so that's moot now.)
 
 ### Status: Sum of Complex Exponentials is DONE + verified — NOT committed.
 - Files: `demos/sum-of-exponentials/index.html` (self-contained single file) and its
