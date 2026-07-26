@@ -166,7 +166,12 @@ playhead (labeled `c₂(t)`); BOTTOM = u-vs-t, the **applied (clipped) infusion 
 hand-drawn **Fig 3.18a** flow chart — V₁,V₂ circles filled by conc, u/k₀/k₁/k₂ arrows drawn as **moving
 dotted lines** (3rd pass: `flowDots` now lays down **fixed ~13px-spaced dots so ≥2 are always visible** —
 a dotted line — and only the *slide speed* `1.5·f` + a subtle alpha `0.30+0.70·f` encode the term flux
-b₀u,k₀c₁,k₁c₁,k₂c₂ normalized by the run's peak flux `fref`; 0 flux ⇒ static faint line), crimson
+b₀u,k₀c₁,k₁c₁,k₂c₂ normalized by the run's peak flux `fref`; 0 flux ⇒ static faint line. **4th pass:** the
+dot offset is the **time-integral of the (normalized) speed**, ∫₀ᵗ1.5·f dτ — precomputed per arrow in
+`buildSim` as `S.phase.{u,k0,k1,k2}[i]` — NOT `simT·speed(simT)`. The old product could *decrease* as the
+flow rate fell (e.g. u decaying to steady state), so the dots visibly ran **backward** even though every
+arrow's flux is ≥0; the integral is monotonic non-decreasing ⇒ dots only advance or pause, never reverse),
+crimson
 **colorbar** (0..cmax); (15%) **patient body+heart cartoon** (`drawBody`
 is centered H+V: unit `u=min(w/9,h/16)`, figure 8u×14.5u at cx=w/2, top=(h−14.5u)/2; the "body =
 bloodstream…" caption was removed per user), body=c₁, heart=c₂, same scale. Bottom METRICS card =

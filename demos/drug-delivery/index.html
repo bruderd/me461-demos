@@ -306,6 +306,25 @@ function simulate(){
       Math.abs(P.k0*c1[i]), Math.abs(P.k1*c1[i]),
       Math.abs(P.k2*c2[i]), Math.abs(P.b0*ua[i]));
   }
+  // ---- dot-animation phase = TIME-INTEGRAL of each arrow's (normalized) flux ----
+  // Sliding the dots by ∫speed dτ — NOT by simT·speed(simT) — keeps the phase
+  // monotonic as the flow rate changes, so a dotted line never appears to run
+  // backwards while its flow is forward (fref-normalized flux is always ≥ 0).
+  const phaseArr = rateAt=>{
+    const p=new Array(N+1); let acc=0; p[0]=0;
+    for(let i=1;i<=N;i++){
+      const f = fref>1e-9 ? Math.min(1, Math.abs(rateAt(i-1))/fref) : 0;
+      acc += 1.5*f*dt;                                 // 1.5 = pattern cycles/sim-sec at full flux
+      p[i]=acc;
+    }
+    return p;
+  };
+  const phase = {
+    u : phaseArr(i=>P.b0*ua[i]),
+    k0: phaseArr(i=>P.k0*c1[i]),
+    k1: phaseArr(i=>P.k1*c1[i]),
+    k2: phaseArr(i=>P.k2*c2[i]),
+  };
 
   // ---- performance metrics ----
   const ss   = c2[N];                                 // steady-state = final value of the response
@@ -326,7 +345,7 @@ function simulate(){
     os = Math.max(0, (peak - yd)/step*100);
   }
 
-  S = { ta, c1, c2, ua, N, dt, T, yd, cmax, fref, ts, os, ss, step };
+  S = { ta, c1, c2, ua, N, dt, T, yd, cmax, fref, phase, ts, os, ss, step };
   updatePoles();
   showMetrics();
   ph = 0; play = true; syncPlay();
@@ -480,7 +499,7 @@ function arrowHead(ctx,x0,y0,x1,y1,size){
   ctx.lineTo(x1-size*Math.cos(a+0.4),y1-size*Math.sin(a+0.4));
   ctx.closePath();ctx.fill();
 }
-function flowDots(ctx,x0,y0,x1,y1,signedRate,fref,simT){
+function flowDots(ctx,x0,y0,x1,y1,signedRate,fref,phase){
   let ax=x0,ay=y0,bx=x1,by=y1, r=signedRate;
   if(r<0){ ax=x1;ay=y1;bx=x0;by=y0; r=-r; }          // dots always travel WITH the flow
   const len=Math.hypot(bx-ax,by-ay);
@@ -488,8 +507,7 @@ function flowDots(ctx,x0,y0,x1,y1,signedRate,fref,simT){
   // speed at which the pattern slides along the arrow encodes the flow rate.
   const n=Math.max(2,Math.round(len/13));            // fixed spacing (~13px) => dotted line
   const f= fref>1e-9 ? clamp(r/fref,0,1) : 0;
-  const speed=1.5*f;                                  // pattern cycles/sim-sec; 0 flow => static
-  const base=(simT*speed)%1;
+  const base=((phase%1)+1)%1;                         // accumulated ∫speed dτ; monotonic => never runs backward
   ctx.save();
   ctx.globalAlpha=0.30+0.70*f;                        // brighter = faster/higher flow (still visible at 0)
   ctx.fillStyle='#FFCB05';
@@ -505,7 +523,7 @@ function drawFlow(){
   const fw=w-cbGap-cbW;
   const iNow = curIdx();
   const c1v = S? S.c1[iNow]:0, c2v = S? S.c2[iNow]:0, uv = S? S.ua[iNow]:0;
-  const cmax = S? S.cmax:1, fref = S? S.fref:0, simT = S? ph*S.dt:0;
+  const cmax = S? S.cmax:1, fref = S? S.fref:0, PH = S? S.phase:null;
 
   const R=Math.min(fw*0.16, h*0.15);
   const v1={x:fw*0.34,y:h*0.52}, v2={x:fw*0.74,y:h*0.52};
@@ -514,21 +532,21 @@ function drawFlow(){
 
   ctx.lineWidth=2; ctx.font='12px '+ 'ui-monospace,monospace';
   // --- arrows (drawn under the circles) ---
-  const drawArrow=(x0,y0,x1,y1,rate,label,lx,ly)=>{
+  const drawArrow=(x0,y0,x1,y1,rate,phaseVal,label,lx,ly)=>{
     ctx.strokeStyle='rgba(138,166,198,.55)';
     ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
     ctx.fillStyle='rgba(138,166,198,.75)';arrowHead(ctx,x0,y0,x1,y1,8);
-    flowDots(ctx,x0,y0,x1,y1,rate,fref,simT);
+    flowDots(ctx,x0,y0,x1,y1,rate,fref,phaseVal);
     ctx.fillStyle='rgba(200,216,236,.9)';ctx.fillText(label,lx,ly);
   };
   // u in (top -> V1), rate b0*u
-  drawArrow(v1.x, topPad, v1.x, v1.y-R, P.b0*uv, 'u', v1.x+8, topPad+14);
+  drawArrow(v1.x, topPad, v1.x, v1.y-R, P.b0*uv, PH?PH.u[iNow]:0, 'u', v1.x+8, topPad+14);
   // k0 elimination (V1 -> bottom), rate k0*c1
-  drawArrow(v1.x, v1.y+R, v1.x, botPad, P.k0*c1v, 'k₀', v1.x+8, (v1.y+R+botPad)/2);
+  drawArrow(v1.x, v1.y+R, v1.x, botPad, P.k0*c1v, PH?PH.k0[iNow]:0, 'k₀', v1.x+8, (v1.y+R+botPad)/2);
   // k1 blood->heart (V1 -> V2, upper), rate k1*c1
-  drawArrow(v1.x+ix, v1.y-dy, v2.x-ix, v1.y-dy, P.k1*c1v, 'k₁', (v1.x+v2.x)/2-6, v1.y-dy-8);
+  drawArrow(v1.x+ix, v1.y-dy, v2.x-ix, v1.y-dy, P.k1*c1v, PH?PH.k1[iNow]:0, 'k₁', (v1.x+v2.x)/2-6, v1.y-dy-8);
   // k2 heart->blood (V2 -> V1, lower), rate k2*c2
-  drawArrow(v2.x-ix, v1.y+dy, v1.x+ix, v1.y+dy, P.k2*c2v, 'k₂', (v1.x+v2.x)/2-6, v1.y+dy+16);
+  drawArrow(v2.x-ix, v1.y+dy, v1.x+ix, v1.y+dy, P.k2*c2v, PH?PH.k2[iNow]:0, 'k₂', (v1.x+v2.x)/2-6, v1.y+dy+16);
 
   // --- compartment circles, filled by concentration ---
   const circle=(cc,val,name)=>{
