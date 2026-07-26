@@ -82,10 +82,12 @@ teaching artifact. The reference implementation is `demos/cruise-control/index.h
       (compartment 1), control its concentration in the heart (compartment 2, the measured output).
       Reduced-LTI plant ċ = Ac + Bu with editable k₀,k₁,k₂,b₀; write a control law expression
       u(c₂,yd,t) (measured output only — c₁ hidden); the *simulated* plant adds physical limits the model
-      omits (u≥0, concentrations floored at 0). Precompute + animate the response: c₂-vs-t plot (50%) with
-      y_d dotted + steady-state-relative settling marker, a colored Fig-3.18a flow chart with moving
-      flow-dots + crimson colorbar (35%), and a centered patient body/heart cartoon on the same scale (15%);
-      2% settling time + % overshoot at the bottom.
+      omits (u≥0, concentrations floored at 0). Precompute + animate the response: the 50%-wide response
+      panel is split into TWO stacked plots — c₂-vs-t (top; y_d dotted + steady-state-relative settling
+      marker) over u-vs-t (bottom; the applied clipped infusion rate) — beside a colored Fig-3.18a flow chart
+      whose arrows render as moving dotted lines (speed ∝ flux) + crimson colorbar (35%), and a centered
+      patient body/heart cartoon on the same scale (15%); 2% settling time + % overshoot at the bottom.
+      (No preset controller chips — the u box is edited by hand.)
 - [ ] DC motor (position/speed control; V→current→torque).
 - [ ] Inverted pendulum / cart-pole (stabilization; nonlinear, great for state feedback).
 - [ ] Ball & beam.
@@ -151,15 +153,21 @@ Recorded `ua[]` stores the clipped u, so readouts/flow-dots reflect what's actua
 
 **What it is.** Top SYSTEM card = equations + variable/param legend + editable k₀,k₁,k₂,b₀ (dual
 value/indicator number inputs, no sliders) + live poles. CONTROLLER card = y_d, IC [c₁(0),c₂(0)],
-duration T, the `u` expression box (with 3 example chips: open-loop / proportional / P+feed-forward),
+duration T, the `u` expression box (**no preset chips** — 3rd pass removed the open-loop/proportional/
+P+feed-forward example buttons; the box is edited by hand, default `0`),
 Run + Play/Pause/⟲ + a playback-speed slider. **Run precomputes** the whole response (RK4, dt=min(.01,T/2500))
 then animates playback of the stored arrays (NOT real-time sim — needed the full trace for metrics anyway;
 same precompute+scrub pattern as sum-of-exponentials). ANIM row (grid `2fr 1.4fr 0.6fr` = **50/35/15%**,
-widths chosen by the user): (50%) c₂-vs-t plot with y_d dotted line, a **green ±2% band around the
-steady-state value**, green `t_s` settling marker, dim full-curve + bright traced-so-far + draggable
-scrubber playhead; (35%) hand-drawn **Fig 3.18a** flow chart — V₁,V₂ circles filled by conc, u/k₀/k₁/k₂
-arrows with **yellow flow-dots whose count & speed ∝ the term flux** (b₀u, k₀c₁, k₁c₁, k₂c₂, normalized by
-the run's peak flux `fref`), crimson **colorbar** (0..cmax); (15%) **patient body+heart cartoon** (`drawBody`
+widths chosen by the user): (50%) the **response card is split into two stacked plots** (class `.respcard`,
+each canvas CSS `height:186px`, `drawPlot`+`drawUPlot`): TOP = c₂-vs-t with y_d dotted line, a **green ±2%
+band around the steady-state value**, green `t_s` settling marker, dim full-curve + bright traced-so-far +
+playhead (labeled `c₂(t)`); BOTTOM = u-vs-t, the **applied (clipped) infusion rate** in maize (labeled
+`u(t)`). Both plots are draggable scrubbers (`scrubTo(cv,clientX)` shared over `[plot,uplot]`); (35%)
+hand-drawn **Fig 3.18a** flow chart — V₁,V₂ circles filled by conc, u/k₀/k₁/k₂ arrows drawn as **moving
+dotted lines** (3rd pass: `flowDots` now lays down **fixed ~13px-spaced dots so ≥2 are always visible** —
+a dotted line — and only the *slide speed* `1.5·f` + a subtle alpha `0.30+0.70·f` encode the term flux
+b₀u,k₀c₁,k₁c₁,k₂c₂ normalized by the run's peak flux `fref`; 0 flux ⇒ static faint line), crimson
+**colorbar** (0..cmax); (15%) **patient body+heart cartoon** (`drawBody`
 is centered H+V: unit `u=min(w/9,h/16)`, figure 8u×14.5u at cx=w/2, top=(h−14.5u)/2; the "body =
 bloodstream…" caption was removed per user), body=c₁, heart=c₂, same scale. Bottom METRICS card =
 **2% settling time** (per user: last exit of a ±2% band around the **STEADY-STATE / final value** `ss=c2[N]`,
@@ -191,10 +199,16 @@ in u; **2nd-pass**: negative control law clipped to u=0, all c₁/c₂/u ≥ 0 a
 engages when overshoot pushes ideal u<0, decay-to-empty stays non-negative, proportional now has a *finite*
 steady-state-relative settling time whose band is around the final value not y_d). Headless-Chrome
 (Chrome.app, `--headless=new`, **override rAF+performance.now to a `window.__pump(n,dt)` queue so playback
-advances deterministically under virtual time**): after the 2nd pass — P+feed-forward ts 3.5 / **os 13.1**
-(> the unclipped 12.6, because u≥0 can't brake) / SS 1.000; proportional **ts 4.0** (finite now) / SS 0.889;
-poles recompute live on k-edit; bad expr caught; screenshot confirms the 50/35/15 layout with the body
-centered + caption gone, green steady-state band, and flow-dots — **no JS errors**.
+advances deterministically under virtual time** — NB the queue clock is in **ms**: pump `dt≈50` ms/frame,
+not 0.033, or `dtWall=(now-lastWall)/1000` barely advances `ph`): after the 2nd pass — P+feed-forward ts 3.5 /
+**os 13.1** (> the unclipped 12.6, because u≥0 can't brake) / SS 1.000; proportional **ts 4.0** (finite now) /
+SS 0.889; poles recompute live on k-edit; bad expr caught; screenshot confirms the 50/35/15 layout with the
+body centered + caption gone, green steady-state band, and flow-dots — **no JS errors**.
+**3rd pass (this session):** response card split into stacked c₂(t)/u(t) plots, flow arrows redrawn as
+moving dotted lines, preset chips removed. Re-verified: `node --check` clean, 33/33 asserts still pass, and a
+headless probe drove default + P+feed-forward (playback to end: c₂→1.00, u→0.50 = k₀/b₀·y_d; ts 3.5/os 13.1/
+SS 1.000) confirming both stacked canvases exist at 186 px, `exChips===0`, and **no JS errors**; screenshot
+shows the dotted flow lines + the two-plot response panel.
 
 ### Status: Laplace Transform Explorer is DONE + verified — NOT committed.
 - Files: `demos/laplace/index.html` (self-contained single file) and its landing-page card in

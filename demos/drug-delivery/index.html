@@ -69,10 +69,6 @@
   textarea#u.bad{border-color:var(--bad)}
   .uhint{font-size:12px;color:var(--muted);line-height:1.55;margin-top:7px}
   .uhint code{font-family:var(--mono);background:#0a1d38;padding:1px 5px;border-radius:4px;font-size:11.5px;color:#ffe9a8}
-  .exlist{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
-  .ex{font-family:var(--mono);font-size:11px;color:#bcd2ec;background:#0a1d38;border:1px solid rgba(138,166,198,.2);
-      padding:3px 8px;border-radius:6px;cursor:pointer}
-  .ex:hover{border-color:rgba(255,203,5,.5);color:#fff}
   .btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:2px}
   button{font-family:var(--sans);font-size:13px;font-weight:600;border:1px solid rgba(138,166,198,.25);
     background:#122f52;color:var(--ink);padding:8px 14px;border-radius:8px;cursor:pointer;transition:.12s}
@@ -94,6 +90,9 @@
   @media(max-width:900px){.anim{grid-template-columns:1fr}}
   /* pin an explicit height so the canvases don't self-size by intrinsic aspect ratio */
   .anim canvas{height:400px}
+  /* the response card stacks two half-height plots (c₂ on top, u below) */
+  .anim .respcard canvas{height:186px}
+  .anim .respcard canvas + canvas{margin-top:8px}
   .roline{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:8px}
   .roline b{color:#cfe3ff;font-weight:600}
 
@@ -174,11 +173,6 @@
           <code>c2</code> (= y), <code>yd</code> (target), <code>t</code> (time), and the model constants
           <code>k0</code> <code>k1</code> <code>k2</code> <code>b0</code>. Math functions (<code>sin</code>, <code>exp</code>, …) work too.
           <em>(c₁ is not measurable, so it is not available.)</em></div>
-        <div class="exlist">
-          <span class="ex" data-u="0">u = 0 (open loop)</span>
-          <span class="ex" data-u="4*(yd - c2)">proportional</span>
-          <span class="ex" data-u="(k0/b0)*yd + 6*(yd - c2)">P + feed-forward</span>
-        </div>
         <div id="err"></div>
       </div>
 
@@ -195,9 +189,10 @@
 
   <!-- ========================== ANIMATION ========================== -->
   <div class="anim">
-    <div class="card">
-      <h2>Response · c₂(t) vs target</h2>
+    <div class="card respcard">
+      <h2>Response · c₂(t) &amp; control u(t)</h2>
       <canvas id="plot" height="320"></canvas>
+      <canvas id="uplot" height="320"></canvas>
       <div class="roline lc">t = <b id="roT">0.0</b> s &nbsp;·&nbsp; c₂ = <b id="roC2">0.00</b> &nbsp;·&nbsp; error = <b id="roErr">0.00</b> &nbsp;·&nbsp; u = <b id="roU">0.00</b></div>
     </div>
     <div class="card">
@@ -343,6 +338,7 @@ function simulate(){
    4. RENDER  —  hand-drawn canvas, no libraries.
    ============================================================ */
 const plot = document.getElementById('plot'),
+      uplot= document.getElementById('uplot'),
       flow = document.getElementById('flow'),
       bodyC= document.getElementById('body');
 function fitDPR(cv){
@@ -386,6 +382,9 @@ function drawPlot(){
   ctx.textAlign='center';
   for(let k=0;k<=4;k++){ const tt=T*k/4; ctx.fillText(tt.toFixed(0),X(tt),h-16); }
   ctx.fillText('t (s)', padL+W/2, h-3);
+  ctx.textAlign='right';
+  ctx.fillStyle='rgba(87,199,255,.9)';ctx.font='600 11px ui-monospace,monospace';
+  ctx.fillText('c₂(t)', w-padR-2, padT+10);
   ctx.textAlign='left';
 
   // ±2% settling band around the steady-state value (green, ties to the t_s marker)
@@ -425,6 +424,54 @@ function drawPlot(){
   ctx.fillStyle='#57C7FF';ctx.beginPath();ctx.arc(xN,yN,4,0,7);ctx.fill();
 }
 
+/* ----- 4a′. control plot: u(t) (the applied, clipped infusion rate) + playhead ----- */
+function drawUPlot(){
+  const {ctx,w,h}=fitDPR(uplot); ctx.clearRect(0,0,w,h);
+  const padL=44,padR=12,padT=14,padB=28, W=w-padL-padR, H=h-padT-padB;
+  if(!S){ return; }
+  const T=S.T;
+  // y-range from the whole u trace, always including 0 (u >= 0 after clipping)
+  let lo=0, hi=0;
+  for(let i=0;i<=S.N;i++){ hi=Math.max(hi,S.ua[i]); lo=Math.min(lo,S.ua[i]); }
+  if(hi-lo<1e-9){ hi+=1; }
+  const m=(hi-lo)*0.10; hi+=m; if(lo<0) lo-=m;
+  const X=t=> padL + (t/T)*W;
+  const Y=v=> padT + (1-(v-lo)/(hi-lo))*H;
+
+  // grid + y labels
+  ctx.font='10px ui-monospace,monospace'; ctx.lineWidth=1;
+  ctx.strokeStyle='rgba(138,166,198,.14)'; ctx.fillStyle='rgba(138,166,198,.65)';
+  for(let i=0;i<=4;i++){ const v=lo+(hi-lo)*i/4, y=Y(v);
+    ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(w-padR,y);ctx.stroke();
+    ctx.fillText(v.toFixed(2),4,y+3); }
+  // x ticks + centered axis label (its own row, clear of the ticks)
+  ctx.textAlign='center';
+  for(let k=0;k<=4;k++){ const tt=T*k/4; ctx.fillText(tt.toFixed(0),X(tt),h-16); }
+  ctx.fillText('t (s)', padL+W/2, h-3);
+  ctx.textAlign='right';
+  ctx.fillStyle='rgba(255,203,5,.9)';ctx.font='600 11px ui-monospace,monospace';
+  ctx.fillText('u(t)', w-padR-2, padT+10);
+  ctx.textAlign='left';
+
+  const iNow = curIdx();
+  // full u curve dim, traced-so-far bright (maize = the input color)
+  ctx.lineWidth=2;
+  ctx.strokeStyle='rgba(255,203,5,.26)';
+  ctx.beginPath();
+  for(let i=0;i<=S.N;i++){ const x=X(S.ta[i]),y=Y(S.ua[i]); i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+  ctx.stroke();
+  ctx.strokeStyle='#FFCB05';
+  ctx.beginPath();
+  for(let i=0;i<=iNow;i++){ const x=X(S.ta[i]),y=Y(S.ua[i]); i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+  ctx.stroke();
+
+  // playhead
+  const xN=X(S.ta[iNow]), yN=Y(S.ua[iNow]);
+  ctx.strokeStyle='rgba(234,241,251,.45)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(xN,padT);ctx.lineTo(xN,h-padB);ctx.stroke();
+  ctx.fillStyle='#FFCB05';ctx.beginPath();ctx.arc(xN,yN,4,0,7);ctx.fill();
+}
+
 /* ----- 4b. flow chart (Fig 3.18a): colored compartments + flow dots + colorbar ----- */
 function arrowHead(ctx,x0,y0,x1,y1,size){
   const a=Math.atan2(y1-y0,x1-x0);
@@ -434,19 +481,23 @@ function arrowHead(ctx,x0,y0,x1,y1,size){
   ctx.closePath();ctx.fill();
 }
 function flowDots(ctx,x0,y0,x1,y1,signedRate,fref,simT){
-  if(fref<=1e-9) return;
   let ax=x0,ay=y0,bx=x1,by=y1, r=signedRate;
-  if(r<0){ ax=x1;ay=y1;bx=x0;by=y0; r=-r; }          // reverse flow direction
-  const f=clamp(r/fref,0,1);
-  if(f<0.02) return;
-  const n=Math.max(1,Math.round(f*6));               // more dots = higher flow
-  const speed=0.25+0.95*f;                            // faster = higher flow (per sim-sec)
+  if(r<0){ ax=x1;ay=y1;bx=x0;by=y0; r=-r; }          // dots always travel WITH the flow
+  const len=Math.hypot(bx-ax,by-ay);
+  // Evenly-spaced dots => a dotted line that is ALWAYS visible (>1 dot). Only the
+  // speed at which the pattern slides along the arrow encodes the flow rate.
+  const n=Math.max(2,Math.round(len/13));            // fixed spacing (~13px) => dotted line
+  const f= fref>1e-9 ? clamp(r/fref,0,1) : 0;
+  const speed=1.5*f;                                  // pattern cycles/sim-sec; 0 flow => static
   const base=(simT*speed)%1;
+  ctx.save();
+  ctx.globalAlpha=0.30+0.70*f;                        // brighter = faster/higher flow (still visible at 0)
   ctx.fillStyle='#FFCB05';
   for(let i=0;i<n;i++){
     const s=(base+i/n)%1, x=ax+(bx-ax)*s, y=ay+(by-ay)*s;
-    ctx.beginPath();ctx.arc(x,y,2.7,0,7);ctx.fill();
+    ctx.beginPath();ctx.arc(x,y,2.4,0,7);ctx.fill();
   }
+  ctx.restore();
 }
 function drawFlow(){
   const {ctx,w,h}=fitDPR(flow); ctx.clearRect(0,0,w,h);
@@ -560,7 +611,7 @@ function frame(now){
       ph += (simSpeed/S.dt)*dtWall;                   // indices per wall-second
       if(ph>=S.N){ ph=S.N; play=false; syncPlay(); }
     }
-    drawPlot(); drawFlow(); drawBody();
+    drawPlot(); drawUPlot(); drawFlow(); drawBody();
     // live readouts
     const i=curIdx();
     document.getElementById('roT').textContent=S.ta[i].toFixed(1);
@@ -621,22 +672,20 @@ sp.addEventListener('input',()=>{ simSpeed=parseFloat(sp.value);
   sp.style.setProperty('--fill',(sp.value-sp.min)/(sp.max-sp.min)*100+'%'); });
 sp.dispatchEvent(new Event('input'));
 
-document.querySelectorAll('.ex').forEach(el=>el.onclick=()=>{
-  document.getElementById('u').value=el.dataset.u; markDirty();
-});
-
-// scrub on the response plot (pauses)
-function scrubTo(clientX){
+// scrub on either time plot (both share the same x-mapping; pauses playback)
+function scrubTo(cv, clientX){
   if(!S) return;
-  const rect=plot.getBoundingClientRect();
-  const padL=44, W=plot.clientWidth-padL-12;
+  const rect=cv.getBoundingClientRect();
+  const padL=44, W=cv.clientWidth-padL-12;
   const frac=clamp((clientX-rect.left-padL)/W,0,1);
   ph=frac*S.N; play=false; syncPlay();
 }
 let scrubbing=false;
-plot.addEventListener('pointerdown',e=>{ scrubbing=true; plot.setPointerCapture(e.pointerId); scrubTo(e.clientX); });
-plot.addEventListener('pointermove',e=>{ if(scrubbing) scrubTo(e.clientX); });
-plot.addEventListener('pointerup',()=>{ scrubbing=false; });
+[plot,uplot].forEach(cv=>{
+  cv.addEventListener('pointerdown',e=>{ scrubbing=true; cv.setPointerCapture(e.pointerId); scrubTo(cv,e.clientX); });
+  cv.addEventListener('pointermove',e=>{ if(scrubbing) scrubTo(cv,e.clientX); });
+  cv.addEventListener('pointerup',()=>{ scrubbing=false; });
+});
 
 // tab textarea inserts spaces (don't jump focus away)
 document.getElementById('u').addEventListener('keydown',e=>{ if(e.key==='Tab'){e.preventDefault();
