@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MECHENG 461 · Two-Compartment Drug Delivery</title>
+<style>
+  /* ---- Instrument-cluster aesthetic: navy panel, maize accent, mono telemetry ---- */
+  :root{
+    --navy:#00274C; --navy-2:#0A1B33; --panel:#102A4C;
+    --maize:#FFCB05; --cyan:#57C7FF; --ink:#EAF1FB; --muted:#8AA6C6;
+    --grid:rgba(138,166,198,.16); --good:#5BD6A0; --bad:#FF6B6B;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--navy-2)}
+  body{background:linear-gradient(180deg,#0B1A30,#08111F 60%);color:var(--ink);
+       font-family:var(--sans);-webkit-font-smoothing:antialiased;padding:22px;min-height:100vh}
+  .wrap{max-width:1240px;margin:0 auto}
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:4px}
+  header .tag{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--maize);
+              border:1px solid rgba(255,203,5,.35);padding:3px 8px;border-radius:4px}
+  h1{font-size:20px;font-weight:650;margin:0;letter-spacing:.01em}
+  header .sub{color:var(--muted);font-size:13px}
+
+  .card{background:linear-gradient(180deg,var(--panel),#0C2140);border:1px solid rgba(138,166,198,.16);
+        border-radius:12px;padding:14px;margin-top:16px}
+  .card h2{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+           color:var(--muted);margin:0 0 10px;font-weight:600}
+  .lc{text-transform:none}          /* opt out of the uppercasing for math symbols */
+  canvas{display:block;width:100%;border-radius:8px}
+
+  /* ---- SYSTEM (dynamics) card ---- */
+  .sysgrid{display:grid;grid-template-columns:1.05fr 1fr;gap:18px}
+  @media(max-width:900px){.sysgrid{grid-template-columns:1fr}}
+  .eqbox{background:#0A1D38;border:1px solid rgba(138,166,198,.14);border-radius:8px;padding:12px 14px}
+  .eq{font-family:var(--mono);font-size:14px;line-height:2.0;color:#dbe9ff}
+  .eq .op{color:var(--muted)}
+  .eq .st{color:var(--cyan)}
+  .eq .inp{color:var(--maize)}
+  .matnote{color:var(--muted);font-size:12px;margin-top:8px;line-height:1.5}
+  .legend{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px;line-height:1.45}
+  .legend .sym{font-family:var(--mono);color:var(--maize);white-space:nowrap}
+  .legend .sym.state{color:var(--cyan)}
+  .legend .dsc{color:#cdddf1}
+  .legend .dsc em{color:var(--muted);font-style:normal}
+  .params{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+  .pfield label{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.06em;
+                color:var(--muted);margin-bottom:4px}
+  .pfield label b{color:var(--maize);font-weight:600}
+  input.num,input.fld{width:100%;background:#08182f;color:#cfe3ff;border:1px solid rgba(138,166,198,.22);
+        border-radius:6px;padding:7px 8px;font-family:var(--mono);font-size:13px}
+  input.num:focus,input.fld:focus,textarea:focus{outline:none;border-color:rgba(255,203,5,.6)}
+  input.num.bad,input.fld.bad{border-color:var(--bad)}
+  .poles{margin-top:12px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .poles b{color:#cfe3ff;font-weight:600}
+
+  /* ---- DESIGN card ---- */
+  .design{display:grid;grid-template-columns:150px 1fr 150px;gap:16px;align-items:start}
+  @media(max-width:820px){.design{grid-template-columns:1fr}}
+  .fldrow label{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.06em;
+                color:var(--muted);margin-bottom:5px}
+  .fldrow label b{color:var(--maize)}
+  .fldrow{margin-bottom:12px}
+  .ic2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  textarea#u{width:100%;height:52px;background:#08182f;color:#ffe9a8;border:1px solid rgba(138,166,198,.22);
+        border-radius:8px;padding:9px 10px;font-family:var(--mono);font-size:14px;line-height:1.5;resize:vertical;tab-size:2}
+  textarea#u.bad{border-color:var(--bad)}
+  .uhint{font-size:12px;color:var(--muted);line-height:1.55;margin-top:7px}
+  .uhint code{font-family:var(--mono);background:#0a1d38;padding:1px 5px;border-radius:4px;font-size:11.5px;color:#ffe9a8}
+  .exlist{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+  .ex{font-family:var(--mono);font-size:11px;color:#bcd2ec;background:#0a1d38;border:1px solid rgba(138,166,198,.2);
+      padding:3px 8px;border-radius:6px;cursor:pointer}
+  .ex:hover{border-color:rgba(255,203,5,.5);color:#fff}
+  .btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:2px}
+  button{font-family:var(--sans);font-size:13px;font-weight:600;border:1px solid rgba(138,166,198,.25);
+    background:#122f52;color:var(--ink);padding:8px 14px;border-radius:8px;cursor:pointer;transition:.12s}
+  button:hover{background:#173a66}
+  button.primary{background:var(--maize);color:#08213f;border-color:transparent}
+  button.primary:hover{filter:brightness(1.06)}
+  button.primary.dirty{animation:pulse 1s ease-in-out infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,203,5,.0)}50%{box-shadow:0 0 0 4px rgba(255,203,5,.25)}}
+  .speed{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .speed input[type=range]{width:110px;-webkit-appearance:none;height:4px;border-radius:3px;
+    background:linear-gradient(90deg,var(--maize) 0%,var(--maize) var(--fill,40%),#20406b var(--fill,40%));outline:none}
+  .speed input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+    background:var(--ink);border:2px solid var(--maize);cursor:pointer}
+  .speed input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--ink);border:2px solid var(--maize)}
+  #err{font-family:var(--mono);font-size:12px;color:var(--bad);min-height:15px;margin-top:8px;white-space:pre-wrap}
+
+  /* ---- ANIMATION row ---- */
+  .anim{display:grid;grid-template-columns:2fr 1fr 1fr;gap:16px}
+  @media(max-width:900px){.anim{grid-template-columns:1fr}}
+  /* pin an explicit height so the canvases don't self-size by intrinsic aspect ratio */
+  .anim canvas{height:400px}
+  .roline{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:8px}
+  .roline b{color:#cfe3ff;font-weight:600}
+
+  /* ---- METRICS ---- */
+  .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media(max-width:640px){.metrics{grid-template-columns:1fr}}
+  .metric{background:#0A1D38;border:1px solid rgba(138,166,198,.14);border-radius:8px;padding:12px 14px}
+  .metric .k{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+  .metric .v{font-family:var(--mono);font-size:24px;font-weight:600;margin-top:4px}
+  .metric .v small{font-size:12px;color:var(--muted);font-weight:400}
+  .metric .sub{font-size:11px;color:var(--muted);margin-top:3px}
+
+  footer{color:var(--muted);font-size:12px;margin-top:18px;line-height:1.6}
+  footer code{font-family:var(--mono);background:#0a1d38;padding:1px 5px;border-radius:4px;font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="tag">MECHENG&nbsp;461</span>
+    <h1>Two-Compartment Drug Delivery</h1>
+    <span class="sub">design an infusion controller so the drug concentration in the heart tracks a target</span>
+  </header>
+
+  <!-- ============================ SYSTEM ============================ -->
+  <div class="card">
+    <h2>System · two-compartment pharmacokinetic model</h2>
+    <div class="sysgrid">
+      <div>
+        <div class="eqbox">
+          <div class="eq lc">
+            <div><span class="st">dc₁/dt</span> <span class="op">=</span> −(k₀+k₁)·<span class="st">c₁</span> <span class="op">+</span> k₁·<span class="st">c₂</span> <span class="op">+</span> b₀·<span class="inp">u</span></div>
+            <div><span class="st">dc₂/dt</span> <span class="op">=</span> k₂·<span class="st">c₁</span> <span class="op">−</span> k₂·<span class="st">c₂</span></div>
+            <div><span class="st">y</span> <span class="op">=</span> <span class="st">c₂</span> <span class="op">&nbsp;&nbsp;(measured output)</span></div>
+          </div>
+          <div class="matnote lc">In state-space form, with c = [c₁ ; c₂]:&nbsp;
+            &nbsp;ċ = A·c + B·u,&nbsp; A = [ −(k₀+k₁), k₁ ; k₂, −k₂ ],&nbsp; B = [ b₀ ; 0 ],&nbsp; y = [0 1]·c.</div>
+        </div>
+        <div class="poles lc" id="poleBox">open-loop poles: —</div>
+      </div>
+
+      <div>
+        <div class="legend lc">
+          <div class="sym state">c₁</div><div class="dsc">bloodstream concentration (compartment 1) — <em>a state; not measured</em></div>
+          <div class="sym state">c₂ = y</div><div class="dsc">heart concentration (compartment 2) — <em>the measured, controlled output</em></div>
+          <div class="sym inp" style="color:var(--maize)">u</div><div class="dsc">control input — <em>drug infusion rate into the bloodstream</em></div>
+          <div class="sym">k₀</div><div class="dsc">elimination rate from the bloodstream <em>(= q₀/V₁)</em></div>
+          <div class="sym">k₁</div><div class="dsc">blood→heart exchange coefficient <em>(= q/V₁)</em></div>
+          <div class="sym">k₂</div><div class="dsc">heart→blood exchange coefficient <em>(= q/V₂)</em></div>
+          <div class="sym">b₀</div><div class="dsc">input gain <em>(= c₀/V₁, injected concentration / blood volume)</em></div>
+        </div>
+        <div class="params">
+          <div class="pfield"><label class="lc"><b>k₀</b> elim.</label><input class="num" id="k0" type="number" step="0.05" value="0.5"></div>
+          <div class="pfield"><label class="lc"><b>k₁</b> b→h</label><input class="num" id="k1" type="number" step="0.05" value="1.0"></div>
+          <div class="pfield"><label class="lc"><b>k₂</b> h→b</label><input class="num" id="k2" type="number" step="0.05" value="0.5"></div>
+          <div class="pfield"><label class="lc"><b>b₀</b> gain</label><input class="num" id="b0" type="number" step="0.05" value="1.0"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ DESIGN ============================ -->
+  <div class="card">
+    <h2>Controller · your design</h2>
+    <div class="design">
+      <div>
+        <div class="fldrow"><label class="lc"><b>y_d</b> — target c₂</label><input class="fld" id="yd" type="number" step="0.1" value="1.0"></div>
+        <div class="fldrow"><label class="lc">initial condition [c₁(0), c₂(0)]</label>
+          <div class="ic2"><input class="fld" id="ic1" type="number" step="0.1" value="0"><input class="fld" id="ic2" type="number" step="0.1" value="0"></div>
+        </div>
+        <div class="fldrow"><label class="lc">duration T (s)</label><input class="fld" id="T" type="number" step="5" min="1" value="40"></div>
+      </div>
+
+      <div>
+        <label class="lc" style="display:block;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--muted);margin-bottom:5px">control law&nbsp;&nbsp;<b style="color:var(--maize)">u =</b>&nbsp;(expression)</label>
+        <textarea id="u" spellcheck="false">0</textarea>
+        <div class="uhint lc">Uses the <b style="color:#cfe3ff">measured output</b> only — available:
+          <code>c2</code> (= y), <code>yd</code> (target), <code>t</code> (time), and the model constants
+          <code>k0</code> <code>k1</code> <code>k2</code> <code>b0</code>. Math functions (<code>sin</code>, <code>exp</code>, …) work too.
+          <em>(c₁ is not measurable, so it is not available.)</em></div>
+        <div class="exlist">
+          <span class="ex" data-u="0">u = 0 (open loop)</span>
+          <span class="ex" data-u="4*(yd - c2)">proportional</span>
+          <span class="ex" data-u="(k0/b0)*yd + 6*(yd - c2)">P + feed-forward</span>
+        </div>
+        <div id="err"></div>
+      </div>
+
+      <div>
+        <div class="btns" style="margin-bottom:12px"><button id="run" class="primary">▶ Run</button></div>
+        <div class="btns" style="margin-bottom:12px">
+          <button id="play">❚❚ Pause</button>
+          <button id="restart">⟲</button>
+        </div>
+        <div class="speed"><span>speed</span><input id="speed" type="range" min="1" max="16" step="0.5" value="4"><span id="speedL">4×</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================== ANIMATION ========================== -->
+  <div class="anim">
+    <div class="card">
+      <h2>Response · c₂(t) vs target</h2>
+      <canvas id="plot" height="320"></canvas>
+      <div class="roline lc">t = <b id="roT">0.0</b> s &nbsp;·&nbsp; c₂ = <b id="roC2">0.00</b> &nbsp;·&nbsp; error = <b id="roErr">0.00</b> &nbsp;·&nbsp; u = <b id="roU">0.00</b></div>
+    </div>
+    <div class="card">
+      <h2>Compartments · flow &amp; concentration</h2>
+      <canvas id="flow" height="320"></canvas>
+    </div>
+    <div class="card">
+      <h2>Patient · blood &amp; heart</h2>
+      <canvas id="body" height="320"></canvas>
+    </div>
+  </div>
+
+  <!-- =========================== METRICS =========================== -->
+  <div class="card">
+    <h2>Performance · relative to y_d</h2>
+    <div class="metrics">
+      <div class="metric"><div class="k">2% settling time</div><div class="v"><span id="mTs">—</span><small> s</small></div><div class="sub">stays within ±2% of y_d (≈ 4 time constants)</div></div>
+      <div class="metric"><div class="k">% overshoot</div><div class="v"><span id="mOs">—</span><small> %</small></div><div class="sub">peak beyond y_d, as % of the step</div></div>
+      <div class="metric"><div class="k">steady-state c₂</div><div class="v"><span id="mSs">—</span></div><div class="sub" id="mSsErr">final value at t = T</div></div>
+    </div>
+  </div>
+
+  <footer>
+    <strong>The model.</strong>&nbsp; A drug is infused into the bloodstream (compartment 1) at rate <code>u</code>;
+    it exchanges with the heart (compartment 2) and is eliminated from the blood. We control <code>c₂</code>,
+    which we can measure; <code>c₁</code> we cannot. The linear plant <code>ċ = A c + B u</code> is integrated with
+    fixed-step RK4. Because the plant has no free integrator, pure proportional feedback leaves a steady-state
+    error — add feed-forward or integral action to close it. Everything runs in your browser; nothing is installed.
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   1. PLANT  —  ẋ = f(x,u).  Reduced linear two-compartment model.
+      State c = [c1, c2];  input u (scalar infusion rate).
+   ============================================================ */
+const P = { k0:0.5, k1:1.0, k2:0.5, b0:1.0 };     // editable parameters
+function deriv(c, u){
+  const c1 = c[0], c2 = c[1];
+  return [ -(P.k0+P.k1)*c1 + P.k1*c2 + P.b0*u ,    // dc1/dt
+            P.k2*c1 - P.k2*c2 ];                    // dc2/dt
+}
+function rk4(c, u, dt){                              // fixed-step 4th-order Runge–Kutta
+  const a = deriv(c,u);
+  const b = deriv([c[0]+0.5*dt*a[0], c[1]+0.5*dt*a[1]], u);
+  const d = deriv([c[0]+0.5*dt*b[0], c[1]+0.5*dt*b[1]], u);
+  const e = deriv([c[0]+dt*d[0],     c[1]+dt*d[1]],     u);
+  return [ c[0]+(dt/6)*(a[0]+2*b[0]+2*d[0]+e[0]),
+           c[1]+(dt/6)*(a[1]+2*b[1]+2*d[1]+e[1]) ];
+}
+
+/* ============================================================
+   2. CONTROLLER  —  u = expression(c2, yd, t, k0..b0).
+      Compiled live from the text box; sees the MEASURED output only.
+   ============================================================ */
+let uFn = null;
+function compileU(src){
+  try{
+    // non-strict body => `with(Math)` allowed, so sin/exp/etc. need no prefix.
+    const fn = new Function('c2','yd','t','k0','k1','k2','b0',
+      'with(Math){ return ( ' + src + ' ); }');
+    const test = fn(0, 1, 0, P.k0,P.k1,P.k2,P.b0);   // smoke-test one call
+    if(typeof test !== 'number' || !isFinite(test)) throw new Error('expression must evaluate to a finite number');
+    uFn = fn; setErr(''); return true;
+  }catch(err){ setErr('⚠ ' + err.message); return false; }
+}
+
+/* ============================================================
+   3. SIMULATE  —  precompute the whole response on "Run".
+   ============================================================ */
+let S = null;                                        // the current simulation result
+const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
+function simulate(){
+  readParams();
+  const yd  = num('yd', 1);
+  const T   = Math.max(1, num('T', 40));
+  const ic  = [num('ic1',0), num('ic2',0)];
+  if(!compileU(document.getElementById('u').value)) return false;
+
+  const dt = Math.min(0.01, T/2500);                 // ~2500+ steps, capped step size
+  const N  = Math.max(2, Math.round(T/dt));
+  const ta=new Float64Array(N+1), c1=new Float64Array(N+1),
+        c2=new Float64Array(N+1), ua=new Float64Array(N+1);
+  let c = ic.slice();
+  for(let i=0;i<=N;i++){
+    const t = i*dt;
+    let u = 0;
+    try{ u = uFn(c[1], yd, t, P.k0,P.k1,P.k2,P.b0); }
+    catch(err){ setErr('⚠ runtime: ' + err.message); return false; }
+    if(!isFinite(u)) u = 0;
+    ta[i]=t; c1[i]=c[0]; c2[i]=c[1]; ua[i]=u;
+    if(i<N) c = rk4(c, u, dt);
+    if(!isFinite(c[0])||!isFinite(c[1])){            // blew up — truncate cleanly
+      for(let j=i+1;j<=N;j++){ ta[j]=j*dt; c1[j]=c1[i]; c2[j]=c2[i]; ua[j]=ua[i]; }
+      break;
+    }
+  }
+
+  // ---- color / flow normalization ----
+  let cmax = Math.max(Math.abs(yd), 1e-6);
+  for(let i=0;i<=N;i++) cmax = Math.max(cmax, c1[i], c2[i]);
+  let fref = 0;                                       // reference flux for dot density/speed
+  for(let i=0;i<=N;i++){
+    fref = Math.max(fref,
+      Math.abs(P.k0*c1[i]), Math.abs(P.k1*c1[i]),
+      Math.abs(P.k2*c2[i]), Math.abs(P.b0*ua[i]));
+  }
+
+  // ---- performance metrics (relative to yd) ----
+  const step = yd - ic[1];
+  const refV = Math.abs(yd) > 1e-9 ? Math.abs(yd) : Math.abs(step);
+  const tol  = 0.02*refV;
+  let ts = null;
+  if(refV > 1e-9){
+    let lastOut = -1;
+    for(let i=0;i<=N;i++) if(Math.abs(c2[i]-yd) > tol) lastOut = i;
+    if(lastOut < 0) ts = 0;                           // started inside the band
+    else if(lastOut < N) ts = ta[lastOut];            // last time it exits the band
+    else ts = Infinity;                               // never settles within T
+  }
+  let os = null;
+  if(Math.abs(step) > 1e-9){
+    let peak = c2[0];
+    for(let i=0;i<=N;i++) peak = step>0 ? Math.max(peak,c2[i]) : Math.min(peak,c2[i]);
+    os = Math.max(0, (peak - yd)/step*100);
+  }
+
+  S = { ta, c1, c2, ua, N, dt, T, yd, cmax, fref, ts, os, ss:c2[N], step, refV };
+  updatePoles();
+  showMetrics();
+  ph = 0; play = true; syncPlay();
+  document.getElementById('run').classList.remove('dirty');
+  return true;
+}
+
+/* ============================================================
+   4. RENDER  —  hand-drawn canvas, no libraries.
+   ============================================================ */
+const plot = document.getElementById('plot'),
+      flow = document.getElementById('flow'),
+      bodyC= document.getElementById('body');
+function fitDPR(cv){
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w*dpr; cv.height = h*dpr;
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx,w,h};
+}
+// crimson single-hue concentration scale: pale (low) -> deep crimson (high)
+function conc2col(v){
+  v = clamp(v,0,1);
+  const L = 96 - 62*v, Sat = 30 + 52*v;
+  return `hsl(352, ${Sat}%, ${L}%)`;
+}
+const fmt=(x,d)=> (isFinite(x)? x.toFixed(d) : '—');
+// current playhead index, always a valid array index in [0, N]
+function curIdx(){ return S? Math.max(0, Math.min(S.N, Math.round(ph)||0)) : 0; }
+
+/* ----- 4a. response plot: c2(t) with y_d dotted line + playhead ----- */
+function drawPlot(){
+  const {ctx,w,h}=fitDPR(plot); ctx.clearRect(0,0,w,h);
+  const padL=44,padR=12,padT=14,padB=28, W=w-padL-padR, H=h-padT-padB;
+  if(!S){ return; }
+  const T=S.T, yd=S.yd;
+  // y-range from the whole c2 trace, always including 0 and yd
+  let lo=Math.min(0,yd), hi=Math.max(0,yd);
+  for(let i=0;i<=S.N;i++){ lo=Math.min(lo,S.c2[i]); hi=Math.max(hi,S.c2[i]); }
+  if(hi-lo<1e-9){ hi+=1; lo-=1; }
+  const m=(hi-lo)*0.10; lo-=m; hi+=m;
+  const X=t=> padL + (t/T)*W;
+  const Y=v=> padT + (1-(v-lo)/(hi-lo))*H;
+
+  // grid + y labels
+  ctx.font='10px ui-monospace,monospace'; ctx.lineWidth=1;
+  ctx.strokeStyle='rgba(138,166,198,.14)'; ctx.fillStyle='rgba(138,166,198,.65)';
+  for(let i=0;i<=4;i++){ const v=lo+(hi-lo)*i/4, y=Y(v);
+    ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(w-padR,y);ctx.stroke();
+    ctx.fillText(v.toFixed(2),4,y+3); }
+  // x ticks + centered axis label (its own row, clear of the ticks)
+  ctx.textAlign='center';
+  for(let k=0;k<=4;k++){ const tt=T*k/4; ctx.fillText(tt.toFixed(0),X(tt),h-16); }
+  ctx.fillText('t (s)', padL+W/2, h-3);
+  ctx.textAlign='left';
+
+  // ±2% band + settling marker
+  const tol=0.02*S.refV;
+  if(S.refV>1e-9){
+    ctx.fillStyle='rgba(255,203,5,.07)';
+    ctx.fillRect(padL, Y(yd+tol), W, Y(yd-tol)-Y(yd+tol));
+  }
+  // y_d dotted target line
+  ctx.strokeStyle='rgba(255,203,5,.9)';ctx.lineWidth=1.5;ctx.setLineDash([5,4]);
+  ctx.beginPath();ctx.moveTo(padL,Y(yd));ctx.lineTo(w-padR,Y(yd));ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='rgba(255,203,5,.9)';ctx.fillText('y_d = '+yd.toFixed(2),padL+4,Y(yd)-5);
+
+  const iNow = curIdx();
+  // full c2 curve dim, traced-so-far bright
+  ctx.lineWidth=2;
+  ctx.strokeStyle='rgba(87,199,255,.28)';
+  ctx.beginPath();
+  for(let i=0;i<=S.N;i++){ const x=X(S.ta[i]),y=Y(S.c2[i]); i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+  ctx.stroke();
+  ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--cyan')||'#57C7FF';
+  ctx.strokeStyle='#57C7FF';
+  ctx.beginPath();
+  for(let i=0;i<=iNow;i++){ const x=X(S.ta[i]),y=Y(S.c2[i]); i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+  ctx.stroke();
+
+  // settling-time marker
+  if(S.ts!=null && isFinite(S.ts) && S.ts>0){
+    ctx.strokeStyle='rgba(91,214,160,.6)';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(X(S.ts),padT);ctx.lineTo(X(S.ts),h-padB);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='rgba(91,214,160,.85)';ctx.fillText('t_s',X(S.ts)+3,padT+10);
+  }
+  // playhead
+  const xN=X(S.ta[iNow]), yN=Y(S.c2[iNow]);
+  ctx.strokeStyle='rgba(234,241,251,.45)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(xN,padT);ctx.lineTo(xN,h-padB);ctx.stroke();
+  ctx.fillStyle='#57C7FF';ctx.beginPath();ctx.arc(xN,yN,4,0,7);ctx.fill();
+}
+
+/* ----- 4b. flow chart (Fig 3.18a): colored compartments + flow dots + colorbar ----- */
+function arrowHead(ctx,x0,y0,x1,y1,size){
+  const a=Math.atan2(y1-y0,x1-x0);
+  ctx.beginPath();ctx.moveTo(x1,y1);
+  ctx.lineTo(x1-size*Math.cos(a-0.4),y1-size*Math.sin(a-0.4));
+  ctx.lineTo(x1-size*Math.cos(a+0.4),y1-size*Math.sin(a+0.4));
+  ctx.closePath();ctx.fill();
+}
+function flowDots(ctx,x0,y0,x1,y1,signedRate,fref,simT){
+  if(fref<=1e-9) return;
+  let ax=x0,ay=y0,bx=x1,by=y1, r=signedRate;
+  if(r<0){ ax=x1;ay=y1;bx=x0;by=y0; r=-r; }          // reverse flow direction
+  const f=clamp(r/fref,0,1);
+  if(f<0.02) return;
+  const n=Math.max(1,Math.round(f*6));               // more dots = higher flow
+  const speed=0.25+0.95*f;                            // faster = higher flow (per sim-sec)
+  const base=(simT*speed)%1;
+  ctx.fillStyle='#FFCB05';
+  for(let i=0;i<n;i++){
+    const s=(base+i/n)%1, x=ax+(bx-ax)*s, y=ay+(by-ay)*s;
+    ctx.beginPath();ctx.arc(x,y,2.7,0,7);ctx.fill();
+  }
+}
+function drawFlow(){
+  const {ctx,w,h}=fitDPR(flow); ctx.clearRect(0,0,w,h);
+  const cbW=16, cbGap=40;                             // colorbar reserve on the right
+  const fw=w-cbGap-cbW;
+  const iNow = curIdx();
+  const c1v = S? S.c1[iNow]:0, c2v = S? S.c2[iNow]:0, uv = S? S.ua[iNow]:0;
+  const cmax = S? S.cmax:1, fref = S? S.fref:0, simT = S? ph*S.dt:0;
+
+  const R=Math.min(fw*0.16, h*0.15);
+  const v1={x:fw*0.34,y:h*0.52}, v2={x:fw*0.74,y:h*0.52};
+  const dy=R*0.42, ix=Math.sqrt(Math.max(0,R*R-dy*dy));
+  const topPad=h*0.13, botPad=h*0.90;
+
+  ctx.lineWidth=2; ctx.font='12px '+ 'ui-monospace,monospace';
+  // --- arrows (drawn under the circles) ---
+  const drawArrow=(x0,y0,x1,y1,rate,label,lx,ly)=>{
+    ctx.strokeStyle='rgba(138,166,198,.55)';
+    ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.75)';arrowHead(ctx,x0,y0,x1,y1,8);
+    flowDots(ctx,x0,y0,x1,y1,rate,fref,simT);
+    ctx.fillStyle='rgba(200,216,236,.9)';ctx.fillText(label,lx,ly);
+  };
+  // u in (top -> V1), rate b0*u
+  drawArrow(v1.x, topPad, v1.x, v1.y-R, P.b0*uv, 'u', v1.x+8, topPad+14);
+  // k0 elimination (V1 -> bottom), rate k0*c1
+  drawArrow(v1.x, v1.y+R, v1.x, botPad, P.k0*c1v, 'k₀', v1.x+8, (v1.y+R+botPad)/2);
+  // k1 blood->heart (V1 -> V2, upper), rate k1*c1
+  drawArrow(v1.x+ix, v1.y-dy, v2.x-ix, v1.y-dy, P.k1*c1v, 'k₁', (v1.x+v2.x)/2-6, v1.y-dy-8);
+  // k2 heart->blood (V2 -> V1, lower), rate k2*c2
+  drawArrow(v2.x-ix, v1.y+dy, v1.x+ix, v1.y+dy, P.k2*c2v, 'k₂', (v1.x+v2.x)/2-6, v1.y+dy+16);
+
+  // --- compartment circles, filled by concentration ---
+  const circle=(cc,val,name)=>{
+    ctx.beginPath();ctx.arc(cc.x,cc.y,R,0,7);
+    ctx.fillStyle=conc2col(val/cmax);ctx.fill();
+    ctx.lineWidth=2;ctx.strokeStyle='rgba(234,241,251,.55)';ctx.stroke();
+    ctx.fillStyle=(val/cmax>0.55)?'#fff':'#0A1D38';
+    ctx.textAlign='center';ctx.font='600 13px ui-monospace,monospace';
+    ctx.fillText(name,cc.x,cc.y-3);
+    ctx.font='11px ui-monospace,monospace';
+    ctx.fillText(val.toFixed(2),cc.x,cc.y+12);
+    ctx.textAlign='left';
+  };
+  circle(v1,c1v,'V₁');
+  circle(v2,c2v,'V₂');
+  // captions
+  ctx.fillStyle='rgba(138,166,198,.8)';ctx.font='10px ui-monospace,monospace';ctx.textAlign='center';
+  ctx.fillText('bloodstream',v1.x,v1.y+R+16);
+  ctx.fillText('heart',v2.x,v2.y+R+16);
+  ctx.textAlign='left';
+
+  // --- colorbar (crimson intensity) ---
+  const cbx=w-cbW-6, cbY0=h*0.14, cbY1=h*0.86, cbH=cbY1-cbY0;
+  for(let i=0;i<cbH;i++){ const v=1-i/cbH; ctx.fillStyle=conc2col(v);
+    ctx.fillRect(cbx,cbY0+i,cbW,1); }
+  ctx.strokeStyle='rgba(234,241,251,.4)';ctx.lineWidth=1;ctx.strokeRect(cbx,cbY0,cbW,cbH);
+  ctx.fillStyle='rgba(138,166,198,.85)';ctx.font='9px ui-monospace,monospace';ctx.textAlign='right';
+  for(let k=0;k<=4;k++){ const v=cmax*(1-k/4), yy=cbY0+cbH*k/4;
+    ctx.fillText(v.toFixed(2), cbx-3, yy+3); }
+  ctx.textAlign='center';ctx.fillText('conc.', cbx+cbW/2, cbY0-6);ctx.textAlign='left';
+}
+
+/* ----- 4c. patient cartoon: body color = c1, heart color = c2 ----- */
+function drawBody(){
+  const {ctx,w,h}=fitDPR(bodyC); ctx.clearRect(0,0,w,h);
+  const iNow = curIdx();
+  const c1v = S? S.c1[iNow]:0, c2v = S? S.c2[iNow]:0, cmax = S? S.cmax:1;
+  const cx=w*0.42, top=h*0.10, u=Math.min(w,h)/22;    // u = drawing unit
+  const bodyFill=conc2col(c1v/cmax), heartFill=conc2col(c2v/cmax);
+  const stroke='rgba(234,241,251,.6)';
+  ctx.lineWidth=2; ctx.lineJoin='round';
+
+  // head
+  ctx.beginPath();ctx.arc(cx,top+u*1.4,u*1.4,0,7);
+  ctx.fillStyle=bodyFill;ctx.fill();ctx.strokeStyle=stroke;ctx.stroke();
+  // torso (rounded)
+  const tx=cx-u*2.3, ty=top+u*3.0, tw=u*4.6, th=u*6.6, r=u*1.1;
+  const rr=(x,y,ww,hh,rad)=>{ctx.beginPath();ctx.moveTo(x+rad,y);
+    ctx.arcTo(x+ww,y,x+ww,y+hh,rad);ctx.arcTo(x+ww,y+hh,x,y+hh,rad);
+    ctx.arcTo(x,y+hh,x,y,rad);ctx.arcTo(x,y,x+ww,y,rad);ctx.closePath();};
+  rr(tx,ty,tw,th,r);ctx.fillStyle=bodyFill;ctx.fill();ctx.strokeStyle=stroke;ctx.stroke();
+  // arms
+  rr(tx-u*1.7,ty+u*0.2,u*1.6,u*4.6,u*0.7);ctx.fillStyle=bodyFill;ctx.fill();ctx.stroke();
+  rr(tx+tw+u*0.1,ty+u*0.2,u*1.6,u*4.6,u*0.7);ctx.fillStyle=bodyFill;ctx.fill();ctx.stroke();
+  // legs
+  rr(cx-u*2.0,ty+th-u*0.3,u*1.7,u*5.2,u*0.8);ctx.fillStyle=bodyFill;ctx.fill();ctx.stroke();
+  rr(cx+u*0.3,ty+th-u*0.3,u*1.7,u*5.2,u*0.8);ctx.fillStyle=bodyFill;ctx.fill();ctx.stroke();
+
+  // heart (inside torso, left-of-center)
+  const hx=cx-u*0.7, hy=ty+u*2.4, hs=u*1.5;
+  ctx.beginPath();
+  ctx.moveTo(hx,hy+hs*0.85);
+  ctx.bezierCurveTo(hx-hs*1.3,hy-hs*0.35, hx-hs*0.35,hy-hs*0.95, hx,hy-hs*0.25);
+  ctx.bezierCurveTo(hx+hs*0.35,hy-hs*0.95, hx+hs*1.3,hy-hs*0.35, hx,hy+hs*0.85);
+  ctx.closePath();
+  ctx.fillStyle=heartFill;ctx.fill();ctx.strokeStyle='rgba(255,255,255,.75)';ctx.lineWidth=1.5;ctx.stroke();
+
+  // labels
+  ctx.font='10px ui-monospace,monospace';ctx.textAlign='left';
+  ctx.fillStyle='rgba(200,216,236,.9)';
+  ctx.fillText('body = bloodstream (c₁ = '+c1v.toFixed(2)+')', w*0.04, h-26);
+  ctx.fillText('heart = c₂ = '+c2v.toFixed(2), w*0.04, h-12);
+}
+
+/* ============================================================
+   5. PLAYBACK LOOP  —  advance a playhead through precomputed data.
+   ============================================================ */
+let ph=0, play=false, simSpeed=4, lastWall=0;
+function frame(now){
+  if(S){
+    let dtWall=(now-lastWall)/1000; lastWall=now;
+    if(!(dtWall>0)) dtWall=0; else if(dtWall>0.05) dtWall=0.05; // guard NaN / negative / tab-switch
+    if(play){
+      ph += (simSpeed/S.dt)*dtWall;                   // indices per wall-second
+      if(ph>=S.N){ ph=S.N; play=false; syncPlay(); }
+    }
+    drawPlot(); drawFlow(); drawBody();
+    // live readouts
+    const i=curIdx();
+    document.getElementById('roT').textContent=S.ta[i].toFixed(1);
+    document.getElementById('roC2').textContent=S.c2[i].toFixed(2);
+    document.getElementById('roErr').textContent=(S.yd-S.c2[i]).toFixed(2);
+    document.getElementById('roU').textContent=S.ua[i].toFixed(2);
+  } else { lastWall=now; }
+  requestAnimationFrame(frame);
+}
+
+/* ============================================================
+   6. READOUTS: poles + metrics
+   ============================================================ */
+function updatePoles(){
+  const tr=-(P.k0+P.k1)-P.k2, det=(P.k0+P.k1)*P.k2 - P.k1*P.k2; // = k0*k2
+  const disc=tr*tr-4*det;
+  let s;
+  if(disc>=0){ const rt=Math.sqrt(disc); s='s = '+((tr+rt)/2).toFixed(3)+',  '+((tr-rt)/2).toFixed(3); }
+  else{ const im=Math.sqrt(-disc)/2; s='s = '+(tr/2).toFixed(3)+' ± '+im.toFixed(3)+'j'; }
+  document.getElementById('poleBox').innerHTML='open-loop poles: <b>'+s+'</b>';
+}
+function showMetrics(){
+  const ts=document.getElementById('mTs'), os=document.getElementById('mOs'),
+        ss=document.getElementById('mSs'), sse=document.getElementById('mSsErr');
+  if(!S){ return; }
+  ts.textContent = S.ts==null ? '—' : (isFinite(S.ts)? S.ts.toFixed(1) : '> T');
+  os.textContent = S.os==null ? '—' : S.os.toFixed(1);
+  ss.textContent = S.ss.toFixed(3);
+  const e=S.yd-S.ss;
+  sse.textContent = 'steady-state error ≈ '+e.toFixed(3);
+}
+
+/* ============================================================
+   7. UI WIRING
+   ============================================================ */
+function setErr(m){document.getElementById('err').textContent=m;}
+function num(id,dflt){ const v=parseFloat(document.getElementById(id).value); return isFinite(v)?v:dflt; }
+function readParams(){ P.k0=num('k0',0.5); P.k1=num('k1',1); P.k2=num('k2',0.5); P.b0=num('b0',1); }
+function syncPlay(){ document.getElementById('play').textContent = play?'❚❚ Pause':'▶ Play'; }
+function markDirty(){ document.getElementById('run').classList.add('dirty'); }
+
+['k0','k1','k2','b0'].forEach(id=>document.getElementById(id).addEventListener('input',()=>{
+  readParams(); updatePoles(); markDirty();
+}));
+['yd','ic1','ic2','T'].forEach(id=>document.getElementById(id).addEventListener('input',markDirty));
+document.getElementById('u').addEventListener('input',markDirty);
+
+document.getElementById('run').onclick=()=>{ lastWall=performance.now(); simulate(); };
+document.getElementById('play').onclick=()=>{
+  if(!S) return;
+  if(ph>=S.N) ph=0;                                   // replay from the top if finished
+  play=!play; lastWall=performance.now(); syncPlay();
+};
+document.getElementById('restart').onclick=()=>{ if(S){ ph=0; play=true; lastWall=performance.now(); syncPlay(); } };
+const sp=document.getElementById('speed');
+sp.addEventListener('input',()=>{ simSpeed=parseFloat(sp.value);
+  document.getElementById('speedL').textContent=simSpeed+'×';
+  sp.style.setProperty('--fill',(sp.value-sp.min)/(sp.max-sp.min)*100+'%'); });
+sp.dispatchEvent(new Event('input'));
+
+document.querySelectorAll('.ex').forEach(el=>el.onclick=()=>{
+  document.getElementById('u').value=el.dataset.u; markDirty();
+});
+
+// scrub on the response plot (pauses)
+function scrubTo(clientX){
+  if(!S) return;
+  const rect=plot.getBoundingClientRect();
+  const padL=44, W=plot.clientWidth-padL-12;
+  const frac=clamp((clientX-rect.left-padL)/W,0,1);
+  ph=frac*S.N; play=false; syncPlay();
+}
+let scrubbing=false;
+plot.addEventListener('pointerdown',e=>{ scrubbing=true; plot.setPointerCapture(e.pointerId); scrubTo(e.clientX); });
+plot.addEventListener('pointermove',e=>{ if(scrubbing) scrubTo(e.clientX); });
+plot.addEventListener('pointerup',()=>{ scrubbing=false; });
+
+// tab textarea inserts spaces (don't jump focus away)
+document.getElementById('u').addEventListener('keydown',e=>{ if(e.key==='Tab'){e.preventDefault();
+  const el=e.target,s=el.selectionStart; el.value=el.value.slice(0,s)+'  '+el.value.slice(el.selectionEnd);
+  el.selectionStart=el.selectionEnd=s+2; }});
+
+// boot
+readParams(); updatePoles();
+simulate();                    // run the default (u = 0) so the panels are populated
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -78,6 +78,13 @@ teaching artifact. The reference implementation is `demos/cruise-control/index.h
       linked 2-D s-plane; exact rational F(s) with true poles/ROC when f is an exp-polynomial,
       numeric ∫₀ᵀ fallback otherwise; F(s) Cartesian value plane (hue-wheel = ∠F key) + rect/polar
       readouts + poles/ROC box.
+- [x] Two-Compartment Drug Delivery (`demos/drug-delivery/`) — infuse a drug into the bloodstream
+      (compartment 1), control its concentration in the heart (compartment 2, the measured output).
+      Reduced-LTI plant ċ = Ac + Bu with editable k₀,k₁,k₂,b₀; write a control law expression
+      u(c₂,yd,t) (measured output only — c₁ hidden); precompute + animate the response: c₂-vs-t plot
+      (½ width) with y_d dotted + settling marker, a colored Fig-3.18a flow chart with moving flow-dots
+      + crimson colorbar (¼), and a patient body/heart cartoon on the same scale (¼); 2% settling time
+      + % overshoot at the bottom.
 - [ ] DC motor (position/speed control; V→current→torque).
 - [ ] Inverted pendulum / cart-pole (stabilization; nonlinear, great for state feedback).
 - [ ] Ball & beam.
@@ -114,11 +121,67 @@ Keep all of them on the same skeleton so students recognize the interface across
 
 ---
 
-## Session resume notes (last updated 2026-07-24)
+## Session resume notes (last updated 2026-07-26)
 
 Where we left off, so the conversation can be cleared and resumed later.
 
-### Status: Laplace Transform Explorer is DONE + verified — NOT committed (NEWEST work).
+### Status: Two-Compartment Drug Delivery is DONE + verified — NOT committed (NEWEST work).
+- Files: `demos/drug-delivery/index.html` (self-contained single file) and its landing-page card in
+  `index.html` (added, right after the Laplace card). Roadmap checkbox above ticked. Live target once
+  pushed: `https://danielbruder.com/me461-demos/demos/drug-delivery/`.
+- Still uncommitted along with all prior uncommitted work. Standing rule: commit/push only when asked;
+  verify git state first (working dir may not be the git root).
+
+**Design decisions the user chose** (asked up front via multiple-choice):
+- **Plant params = reduced LTI** k₀,k₁,k₂,b₀ (eq 3.27 state-space form), edited in the top box; the
+  scalar ODEs + matrix form + live open-loop poles are shown. (NOT the physical V₁,V₂,q,q₀,c₀ form.)
+- **Control law sees the measured output only.** The `u` expression may reference `c2` (=y), `yd`, `t`,
+  and the model constants `k0 k1 k2 b0` (for feed-forward) + Math via `with(Math)`. **c₁ is deliberately
+  NOT exposed** (unmeasured). No injected e/ei/edot PID helpers — it's a plain expression. Default u=0.
+- **Color scale = crimson single-hue** intensity (pale→deep), `conc2col(v)=hsl(352, 30+52v%, 96−62v%)`;
+  shared by the flow-chart compartments, the colorbar, and the body+heart cartoon.
+
+**What it is.** Top SYSTEM card = equations + variable/param legend + editable k₀,k₁,k₂,b₀ (dual
+value/indicator number inputs, no sliders) + live poles. CONTROLLER card = y_d, IC [c₁(0),c₂(0)],
+duration T, the `u` expression box (with 3 example chips: open-loop / proportional / P+feed-forward),
+Run + Play/Pause/⟲ + a playback-speed slider. **Run precomputes** the whole response (RK4, dt=min(.01,T/2500))
+then animates playback of the stored arrays (NOT real-time sim — needed the full trace for metrics anyway;
+same precompute+scrub pattern as sum-of-exponentials). ANIM row (grid `2fr 1fr 1fr`): (½) c₂-vs-t plot
+with y_d dotted line, ±2% band, green `t_s` settling marker, dim full-curve + bright traced-so-far +
+draggable scrubber playhead; (¼) hand-drawn **Fig 3.18a** flow chart — V₁,V₂ circles filled by conc,
+u/k₀/k₁/k₂ arrows with **yellow flow-dots whose count & speed ∝ the term flux** (b₀u, k₀c₁, k₁c₁, k₂c₂,
+normalized by the run's peak flux `fref`), crimson **colorbar** (0..cmax); (¼) **patient body+heart cartoon**,
+body=c₁, heart=c₂, same scale. Bottom METRICS card = **2% settling time** (last exit of ±2%·y_d band; "> T"
+if never; "—" if undefined), **% overshoot** (peak beyond y_d as % of the step), steady-state c₂ + SS error.
+Colors auto-normalize to `cmax`=max(|y_d|, peak c₁, peak c₂) over the run.
+
+**Non-obvious plumbing / gotchas already handled (don't re-break).**
+- **Playback index MUST stay a valid array index.** Bug found + fixed this session: `dtWall` from
+  `(now-lastWall)/1000` could go **negative/NaN** (mixing `performance.now()` set in click handlers with
+  the rAF `now`, or a tab-switch), driving `ph` negative → `S.c1[-15]` undefined → `.toFixed` crash that
+  killed the rAF loop. Fixes: clamp `dtWall` to `[0,0.05]` (the `!(dtWall>0)` test also catches NaN) **and**
+  route every playhead read through `curIdx() = clamp(round(ph)||0, 0, N)`. Keep both.
+- **`.anim canvas` needs an explicit CSS `height:400px`.** With only `width:100%` + an HTML `height` attr,
+  a canvas self-sizes by intrinsic aspect ratio, so the wide (2fr) plot ballooned tall and the 1fr panels
+  had dead space. Pinning CSS height fixes it and keeps `fitDPR` stable (clientHeight constant).
+- Greek/subscript labels: the `.card h2`/`.k`/`.lbl` `text-transform:uppercase` mangles σ, k₀, y_d, f(t) —
+  wrap those in `.lc{text-transform:none}` (already applied throughout).
+- `u` compiled via `new Function('c2','yd','t','k0','k1','k2','b0','with(Math){return (…);}')` — non-strict
+  body so `with` is legal; smoke-tested to a finite number in `compileU`, else shows ⚠ and aborts the run.
+- x-axis label sits on its own row (`padB=28`, ticks at `h-16`, "t (s)" centered at `h-3`) to avoid the
+  earlier collision with the last tick.
+
+**Verified this session** (scratchpad, reusable): `node --check` clean; **23/23 logic asserts**
+(`test_logic.mjs` — const-infusion SS c₂=b₀U/k₀, proportional SS = K·y_d/(K+k₀/b₀) w/ nonzero error,
+P+feed-forward → ~0 SS error, eigenvalues solve the char. eq, u=0⇒c₂≡0 & ts=∞ & os=0, first-order 2%
+settling ≈ 3.9τ, overshoot metric, parser accept/reject incl. **c₁ rejected**, crimson-scale monotonicity,
+flux monotonic in u). Headless-Chrome (Chrome.app, `--headless=new`, **override rAF+performance.now to a
+`window.__pump(n,dt)` queue so playback advances deterministically under virtual time**): metrics match
+(prop SS 0.889, ff ts 3.2 / os 12.6 / SS 1.000), poles recompute live on k-edit, bad expr caught, scrubber
+jumps to 25%→t=10, mid-transient screenshot shows V₁=1.86 leading V₂=1.00 with flow-dots + red body/heart —
+**no JS errors**.
+
+### Status: Laplace Transform Explorer is DONE + verified — NOT committed.
 - Files: `demos/laplace/index.html` (self-contained single file) and its landing-page card in
   `index.html` (added, right after the Sum of Complex Exponentials card). Roadmap checkbox above
   ticked. Live target once pushed: `https://danielbruder.com/me461-demos/demos/laplace/`.
