@@ -90,7 +90,7 @@
   #err{font-family:var(--mono);font-size:12px;color:var(--bad);min-height:15px;margin-top:8px;white-space:pre-wrap}
 
   /* ---- ANIMATION row ---- */
-  .anim{display:grid;grid-template-columns:2fr 1fr 1fr;gap:16px}
+  .anim{display:grid;grid-template-columns:2fr 1.4fr 0.6fr;gap:16px}  /* 50% / 35% / 15% */
   @media(max-width:900px){.anim{grid-template-columns:1fr}}
   /* pin an explicit height so the canvases don't self-size by intrinsic aspect ratio */
   .anim canvas{height:400px}
@@ -214,7 +214,7 @@
   <div class="card">
     <h2>Performance · relative to y_d</h2>
     <div class="metrics">
-      <div class="metric"><div class="k">2% settling time</div><div class="v"><span id="mTs">—</span><small> s</small></div><div class="sub">stays within ±2% of y_d (≈ 4 time constants)</div></div>
+      <div class="metric"><div class="k">2% settling time</div><div class="v"><span id="mTs">—</span><small> s</small></div><div class="sub">stays within ±2% of the steady-state value (≈ 4 time constants)</div></div>
       <div class="metric"><div class="k">% overshoot</div><div class="v"><span id="mOs">—</span><small> %</small></div><div class="sub">peak beyond y_d, as % of the step</div></div>
       <div class="metric"><div class="k">steady-state c₂</div><div class="v"><span id="mSs">—</span></div><div class="sub" id="mSsErr">final value at t = T</div></div>
     </div>
@@ -282,15 +282,20 @@ function simulate(){
   const N  = Math.max(2, Math.round(T/dt));
   const ta=new Float64Array(N+1), c1=new Float64Array(N+1),
         c2=new Float64Array(N+1), ua=new Float64Array(N+1);
-  let c = ic.slice();
+  // The "real" plant enforces physical limits the displayed linear model does not:
+  // the infusion pump can only push drug IN (u >= 0), and concentrations can't go
+  // negative (floored at 0). These make the true dynamics richer than eq (3.27).
+  let c = [Math.max(0,ic[0]), Math.max(0,ic[1])];
   for(let i=0;i<=N;i++){
     const t = i*dt;
     let u = 0;
     try{ u = uFn(c[1], yd, t, P.k0,P.k1,P.k2,P.b0); }
     catch(err){ setErr('⚠ runtime: ' + err.message); return false; }
     if(!isFinite(u)) u = 0;
+    u = Math.max(0, u);                              // pump can't infuse a negative rate
     ta[i]=t; c1[i]=c[0]; c2[i]=c[1]; ua[i]=u;
-    if(i<N) c = rk4(c, u, dt);
+    if(i<N){ c = rk4(c, u, dt);
+      c[0]=Math.max(0,c[0]); c[1]=Math.max(0,c[1]); } // concentrations stay non-negative
     if(!isFinite(c[0])||!isFinite(c[1])){            // blew up — truncate cleanly
       for(let j=i+1;j<=N;j++){ ta[j]=j*dt; c1[j]=c1[i]; c2[j]=c2[i]; ua[j]=ua[i]; }
       break;
@@ -307,18 +312,18 @@ function simulate(){
       Math.abs(P.k2*c2[i]), Math.abs(P.b0*ua[i]));
   }
 
-  // ---- performance metrics (relative to yd) ----
-  const step = yd - ic[1];
-  const refV = Math.abs(yd) > 1e-9 ? Math.abs(yd) : Math.abs(step);
-  const tol  = 0.02*refV;
+  // ---- performance metrics ----
+  const ss   = c2[N];                                 // steady-state = final value of the response
+  const step = yd - c2[0];
+  // 2% settling time: last exit from a ±2% band around the STEADY-STATE value.
   let ts = null;
-  if(refV > 1e-9){
+  const stol = 0.02*Math.abs(ss);
+  if(Math.abs(ss) > 1e-6){
     let lastOut = -1;
-    for(let i=0;i<=N;i++) if(Math.abs(c2[i]-yd) > tol) lastOut = i;
-    if(lastOut < 0) ts = 0;                           // started inside the band
-    else if(lastOut < N) ts = ta[lastOut];            // last time it exits the band
-    else ts = Infinity;                               // never settles within T
-  }
+    for(let i=0;i<=N;i++) if(Math.abs(c2[i]-ss) > stol) lastOut = i;
+    ts = lastOut < 0 ? 0 : ta[lastOut];               // 0 if it started inside its own band
+  }                                                   // ss≈0 => band degenerate => ts undefined
+  // % overshoot: peak beyond the target y_d, as a % of the commanded step.
   let os = null;
   if(Math.abs(step) > 1e-9){
     let peak = c2[0];
@@ -326,7 +331,7 @@ function simulate(){
     os = Math.max(0, (peak - yd)/step*100);
   }
 
-  S = { ta, c1, c2, ua, N, dt, T, yd, cmax, fref, ts, os, ss:c2[N], step, refV };
+  S = { ta, c1, c2, ua, N, dt, T, yd, cmax, fref, ts, os, ss, step };
   updatePoles();
   showMetrics();
   ph = 0; play = true; syncPlay();
@@ -383,11 +388,11 @@ function drawPlot(){
   ctx.fillText('t (s)', padL+W/2, h-3);
   ctx.textAlign='left';
 
-  // ±2% band + settling marker
-  const tol=0.02*S.refV;
-  if(S.refV>1e-9){
-    ctx.fillStyle='rgba(255,203,5,.07)';
-    ctx.fillRect(padL, Y(yd+tol), W, Y(yd-tol)-Y(yd+tol));
+  // ±2% settling band around the steady-state value (green, ties to the t_s marker)
+  const btol=0.02*Math.abs(S.ss);
+  if(Math.abs(S.ss)>1e-6){
+    ctx.fillStyle='rgba(91,214,160,.10)';
+    ctx.fillRect(padL, Y(S.ss+btol), W, Y(S.ss-btol)-Y(S.ss+btol));
   }
   // y_d dotted target line
   ctx.strokeStyle='rgba(255,203,5,.9)';ctx.lineWidth=1.5;ctx.setLineDash([5,4]);
@@ -510,7 +515,9 @@ function drawBody(){
   const {ctx,w,h}=fitDPR(bodyC); ctx.clearRect(0,0,w,h);
   const iNow = curIdx();
   const c1v = S? S.c1[iNow]:0, c2v = S? S.c2[iNow]:0, cmax = S? S.cmax:1;
-  const cx=w*0.42, top=h*0.10, u=Math.min(w,h)/22;    // u = drawing unit
+  // drawing unit sized to fit; figure is 8u wide × 14.5u tall — center it in the canvas
+  const u=Math.min(w/9, h/16);
+  const cx=w/2, top=(h-14.5*u)/2;
   const bodyFill=conc2col(c1v/cmax), heartFill=conc2col(c2v/cmax);
   const stroke='rgba(234,241,251,.6)';
   ctx.lineWidth=2; ctx.lineJoin='round';
@@ -539,12 +546,6 @@ function drawBody(){
   ctx.bezierCurveTo(hx+hs*0.35,hy-hs*0.95, hx+hs*1.3,hy-hs*0.35, hx,hy+hs*0.85);
   ctx.closePath();
   ctx.fillStyle=heartFill;ctx.fill();ctx.strokeStyle='rgba(255,255,255,.75)';ctx.lineWidth=1.5;ctx.stroke();
-
-  // labels
-  ctx.font='10px ui-monospace,monospace';ctx.textAlign='left';
-  ctx.fillStyle='rgba(200,216,236,.9)';
-  ctx.fillText('body = bloodstream (c₁ = '+c1v.toFixed(2)+')', w*0.04, h-26);
-  ctx.fillText('heart = c₂ = '+c2v.toFixed(2), w*0.04, h-12);
 }
 
 /* ============================================================
@@ -585,7 +586,7 @@ function showMetrics(){
   const ts=document.getElementById('mTs'), os=document.getElementById('mOs'),
         ss=document.getElementById('mSs'), sse=document.getElementById('mSsErr');
   if(!S){ return; }
-  ts.textContent = S.ts==null ? '—' : (isFinite(S.ts)? S.ts.toFixed(1) : '> T');
+  ts.textContent = (S.ts==null || !isFinite(S.ts)) ? '—' : S.ts.toFixed(1);
   os.textContent = S.os==null ? '—' : S.os.toFixed(1);
   ss.textContent = S.ss.toFixed(3);
   const e=S.yd-S.ss;

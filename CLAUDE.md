@@ -81,10 +81,11 @@ teaching artifact. The reference implementation is `demos/cruise-control/index.h
 - [x] Two-Compartment Drug Delivery (`demos/drug-delivery/`) — infuse a drug into the bloodstream
       (compartment 1), control its concentration in the heart (compartment 2, the measured output).
       Reduced-LTI plant ċ = Ac + Bu with editable k₀,k₁,k₂,b₀; write a control law expression
-      u(c₂,yd,t) (measured output only — c₁ hidden); precompute + animate the response: c₂-vs-t plot
-      (½ width) with y_d dotted + settling marker, a colored Fig-3.18a flow chart with moving flow-dots
-      + crimson colorbar (¼), and a patient body/heart cartoon on the same scale (¼); 2% settling time
-      + % overshoot at the bottom.
+      u(c₂,yd,t) (measured output only — c₁ hidden); the *simulated* plant adds physical limits the model
+      omits (u≥0, concentrations floored at 0). Precompute + animate the response: c₂-vs-t plot (50%) with
+      y_d dotted + steady-state-relative settling marker, a colored Fig-3.18a flow chart with moving
+      flow-dots + crimson colorbar (35%), and a centered patient body/heart cartoon on the same scale (15%);
+      2% settling time + % overshoot at the bottom.
 - [ ] DC motor (position/speed control; V→current→torque).
 - [ ] Inverted pendulum / cart-pole (stabilization; nonlinear, great for state feedback).
 - [ ] Ball & beam.
@@ -141,19 +142,30 @@ Where we left off, so the conversation can be cleared and resumed later.
 - **Color scale = crimson single-hue** intensity (pale→deep), `conc2col(v)=hsl(352, 30+52v%, 96−62v%)`;
   shared by the flow-chart compartments, the colorbar, and the body+heart cartoon.
 
+**"Real" plant ≠ displayed model (user request, 2nd pass).** The DISPLAYED equations stay the clean
+linear eq (3.27). But the SIMULATED plant enforces physical limits the model omits: **u is clipped to
+≥ 0** (`u=Math.max(0,u)` — an infusion pump can't push a negative rate) and **concentrations are floored
+at 0** (`c[i]=Math.max(0,c[i])` after each RK4 step). Pedagogical payoff: the clip can't actively "brake"
+c₂, so the real overshoot is *larger* than the linear model predicts (e.g. P+feed-forward: 12.6%→13.1%).
+Recorded `ua[]` stores the clipped u, so readouts/flow-dots reflect what's actually applied.
+
 **What it is.** Top SYSTEM card = equations + variable/param legend + editable k₀,k₁,k₂,b₀ (dual
 value/indicator number inputs, no sliders) + live poles. CONTROLLER card = y_d, IC [c₁(0),c₂(0)],
 duration T, the `u` expression box (with 3 example chips: open-loop / proportional / P+feed-forward),
 Run + Play/Pause/⟲ + a playback-speed slider. **Run precomputes** the whole response (RK4, dt=min(.01,T/2500))
 then animates playback of the stored arrays (NOT real-time sim — needed the full trace for metrics anyway;
-same precompute+scrub pattern as sum-of-exponentials). ANIM row (grid `2fr 1fr 1fr`): (½) c₂-vs-t plot
-with y_d dotted line, ±2% band, green `t_s` settling marker, dim full-curve + bright traced-so-far +
-draggable scrubber playhead; (¼) hand-drawn **Fig 3.18a** flow chart — V₁,V₂ circles filled by conc,
-u/k₀/k₁/k₂ arrows with **yellow flow-dots whose count & speed ∝ the term flux** (b₀u, k₀c₁, k₁c₁, k₂c₂,
-normalized by the run's peak flux `fref`), crimson **colorbar** (0..cmax); (¼) **patient body+heart cartoon**,
-body=c₁, heart=c₂, same scale. Bottom METRICS card = **2% settling time** (last exit of ±2%·y_d band; "> T"
-if never; "—" if undefined), **% overshoot** (peak beyond y_d as % of the step), steady-state c₂ + SS error.
-Colors auto-normalize to `cmax`=max(|y_d|, peak c₁, peak c₂) over the run.
+same precompute+scrub pattern as sum-of-exponentials). ANIM row (grid `2fr 1.4fr 0.6fr` = **50/35/15%**,
+widths chosen by the user): (50%) c₂-vs-t plot with y_d dotted line, a **green ±2% band around the
+steady-state value**, green `t_s` settling marker, dim full-curve + bright traced-so-far + draggable
+scrubber playhead; (35%) hand-drawn **Fig 3.18a** flow chart — V₁,V₂ circles filled by conc, u/k₀/k₁/k₂
+arrows with **yellow flow-dots whose count & speed ∝ the term flux** (b₀u, k₀c₁, k₁c₁, k₂c₂, normalized by
+the run's peak flux `fref`), crimson **colorbar** (0..cmax); (15%) **patient body+heart cartoon** (`drawBody`
+is centered H+V: unit `u=min(w/9,h/16)`, figure 8u×14.5u at cx=w/2, top=(h−14.5u)/2; the "body =
+bloodstream…" caption was removed per user), body=c₁, heart=c₂, same scale. Bottom METRICS card =
+**2% settling time** (per user: last exit of a ±2% band around the **STEADY-STATE / final value** `ss=c2[N]`,
+not around y_d; "—" if ss≈0 so the band is degenerate — e.g. the u=0 default), **% overshoot** (still peak
+beyond y_d as % of the step), steady-state c₂ + SS error. Colors auto-normalize to `cmax`=max(|y_d|,
+peak c₁, peak c₂) over the run.
 
 **Non-obvious plumbing / gotchas already handled (don't re-break).**
 - **Playback index MUST stay a valid array index.** Bug found + fixed this session: `dtWall` from
@@ -171,15 +183,18 @@ Colors auto-normalize to `cmax`=max(|y_d|, peak c₁, peak c₂) over the run.
 - x-axis label sits on its own row (`padB=28`, ticks at `h-16`, "t (s)" centered at `h-3`) to avoid the
   earlier collision with the last tick.
 
-**Verified this session** (scratchpad, reusable): `node --check` clean; **23/23 logic asserts**
-(`test_logic.mjs` — const-infusion SS c₂=b₀U/k₀, proportional SS = K·y_d/(K+k₀/b₀) w/ nonzero error,
-P+feed-forward → ~0 SS error, eigenvalues solve the char. eq, u=0⇒c₂≡0 & ts=∞ & os=0, first-order 2%
-settling ≈ 3.9τ, overshoot metric, parser accept/reject incl. **c₁ rejected**, crimson-scale monotonicity,
-flux monotonic in u). Headless-Chrome (Chrome.app, `--headless=new`, **override rAF+performance.now to a
-`window.__pump(n,dt)` queue so playback advances deterministically under virtual time**): metrics match
-(prop SS 0.889, ff ts 3.2 / os 12.6 / SS 1.000), poles recompute live on k-edit, bad expr caught, scrubber
-jumps to 25%→t=10, mid-transient screenshot shows V₁=1.86 leading V₂=1.00 with flow-dots + red body/heart —
-**no JS errors**.
+**Verified** (scratchpad, reusable): `node --check` clean; **33/33 logic asserts** (`test_logic.mjs` —
+const-infusion SS c₂=b₀U/k₀, proportional SS = K·y_d/(K+k₀/b₀) w/ nonzero error, P+feed-forward → ~0 SS
+error, eigenvalues solve the char. eq, u=0⇒c₂≡0 & ts undefined & os=0, first-order settling ≈ 3.9τ,
+overshoot metric, parser accept/reject incl. **c₁ rejected**, crimson-scale monotonicity, flux monotonic
+in u; **2nd-pass**: negative control law clipped to u=0, all c₁/c₂/u ≥ 0 across an overshooting run, clip
+engages when overshoot pushes ideal u<0, decay-to-empty stays non-negative, proportional now has a *finite*
+steady-state-relative settling time whose band is around the final value not y_d). Headless-Chrome
+(Chrome.app, `--headless=new`, **override rAF+performance.now to a `window.__pump(n,dt)` queue so playback
+advances deterministically under virtual time**): after the 2nd pass — P+feed-forward ts 3.5 / **os 13.1**
+(> the unclipped 12.6, because u≥0 can't brake) / SS 1.000; proportional **ts 4.0** (finite now) / SS 0.889;
+poles recompute live on k-edit; bad expr caught; screenshot confirms the 50/35/15 layout with the body
+centered + caption gone, green steady-state band, and flow-dots — **no JS errors**.
 
 ### Status: Laplace Transform Explorer is DONE + verified — NOT committed.
 - Files: `demos/laplace/index.html` (self-contained single file) and its landing-page card in
