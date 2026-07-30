@@ -154,6 +154,7 @@
       </div>
       <button id="sim" class="primary">Simulate ▶</button>
       <button id="clear">Clear traces</button>
+      <button id="resetView">Reset view</button>
     </div>
   </div>
 
@@ -190,7 +191,8 @@
    0. STATE
    ================================================================ */
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const view={x1min:-7,x1max:7,x2min:-5,x2max:5};   // current phase-plot window (data units)
+const VIEW0={x1min:-7,x1max:7,x2min:-5,x2max:5};  // default window (for Reset view)
+const view={...VIEW0};                            // current phase-plot window (data units)
 let   T=20;                                        // sim duration & time-axis span (s)
 let   Ffn=null;                                    // compiled dynamics: (x1,x2,t) -> [f1,f2]
 const params={};                                   // name -> value
@@ -589,6 +591,8 @@ el('render').onclick=()=>{ if(compile()) renderPhase(); };
 [el('f1'),el('f2')].forEach(inp=>inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ if(compile()) renderPhase(); }}));
 el('sim').onclick=simulate;
 el('clear').onclick=()=>{ traces.length=0; current=null; colorIx=0; setStatus('Traces cleared.'); renderPhase(); renderTime(); };
+// reset view: restore the default phase window (leaves traces, IC, and duration untouched)
+el('resetView').onclick=()=>{ Object.assign(view,VIEW0); syncFields(); renderPhase(); setStatus('View reset.'); };
 
 // playback-speed slider — log scale (slider value is the exponent; speed = 2^value).
 // Live: changing it mid-run re-paces the animation on the next frame (step() re-reads playbackDuration()).

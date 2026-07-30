@@ -91,6 +91,12 @@
   button.primary:hover{filter:brightness(1.06)}
   button:disabled{opacity:.5;cursor:not-allowed}
 
+  /* ---- playback-speed slider ---- */
+  .speed{display:flex;flex-direction:column;gap:5px;min-width:158px}
+  .speed .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);
+    text-transform:uppercase;display:flex;justify-content:space-between;align-items:baseline}
+  .speed .k b{color:var(--maize);font-size:12px}
+
   /* ---- compact per-panel axis controls ---- */
   .axisrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 9px}
   .axisrow .grp{display:flex;align-items:center;gap:4px}
@@ -179,8 +185,13 @@
       <div class="ro"><div class="k">t</div><div class="v" id="roT">0.00</div></div>
     </div>
     <div class="btns">
+      <div class="speed">
+        <span class="k">Playback speed <b id="spdVal">1.0×</b></span>
+        <input id="spd" type="range" min="-1" max="4" step="0.05" value="0">
+      </div>
       <button id="sim" class="primary">Simulate ▶</button>
       <button id="clear">Clear traces</button>
+      <button id="resetView">Reset view</button>
     </div>
   </div>
 
@@ -255,11 +266,14 @@
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const el=id=>document.getElementById(id);
 
-const viewL={x1min:-1,x1max:5,x2min:-6,x2max:6};        // nonlinear phase window (x-space)
-const viewR={                                            // linear phase window, per frame
+// default phase windows (kept immutable so "Reset view" can restore them)
+const VIEWL0={x1min:-1,x1max:5,x2min:-6,x2max:6};       // nonlinear phase window (x-space)
+const VIEWR0={                                           // linear phase window, per frame
   xt:{x1min:-4,x1max:4,x2min:-6,x2max:6},               //   deviation coords x̃
   x :{x1min:-1,x1max:5,x2min:-6,x2max:6}                //   original coords x
 };
+const viewL={...VIEWL0};                                 // live nonlinear window (panned/zoomed)
+const viewR={xt:{...VIEWR0.xt}, x:{...VIEWR0.x}};        // live linear windows, per frame
 let rightFrame='xt';                                     // 'xt' | 'x'
 let T=15;                                                 // shared duration (s)
 
@@ -273,6 +287,7 @@ let pendingIC={x1:2.4,x2:0};                             // initial condition in
 const traces=[];                                          // committed runs: {nl, lXt, lX, color}
 let current=null;                                         // animating run: {u, color, nl, lXt, lX}
 let animating=false, lastWall=0, colorIx=0;
+let speedMul=1;                                          // playback-speed multiplier (1× = base pace)
 const TRACE_COLORS=['#57C7FF','#FFCB05','#5BD6A0','#FF6B6B','#B79CFF','#FF9F45','#4ADEDE','#F78FB3'];
 const nextColor=()=>TRACE_COLORS[(colorIx++)%TRACE_COLORS.length];
 const SIM_DT=0.01;
@@ -629,7 +644,8 @@ function renderAll(){ renderPhaseL(); renderPhaseR(); renderTimeL(); renderTimeR
 /* ================================================================
    8. SIMULATE — integrate both systems, animate on one clock
    ================================================================ */
-const playbackDuration=()=>clamp(T,2.5,9);
+// wall-clock seconds for the animation, sped up (or slowed) by the playback-speed slider
+const playbackDuration=()=>clamp(T,2.5,9)/speedMul;
 function simulate(){
   if(animating) return;
   if(!Fnl_||!Tf_||!Flin_){ setErr('⚠ render valid fields first'); return; }
@@ -771,6 +787,24 @@ el('render').onclick=()=>{ if(compile()){ updateReadouts(); renderAll(); } };
   if(e.key==='Enter'){ if(compile()){ updateReadouts(); renderAll(); } }}));
 el('sim').onclick=simulate;
 el('clear').onclick=()=>{ traces.length=0; current=null; colorIx=0; setStatus('Traces cleared.'); renderAll(); };
+
+// reset view: restore both phase windows (nonlinear + both linear frames) to their defaults
+el('resetView').onclick=()=>{
+  Object.assign(viewL,VIEWL0);
+  Object.assign(viewR.xt,VIEWR0.xt); Object.assign(viewR.x,VIEWR0.x);
+  syncAxisFields(); renderAll(); setStatus('View reset.');
+};
+
+// playback-speed slider — log scale (slider value is the exponent; speed = 2^value).
+// Live: changing it mid-run re-paces the animation on the next frame (step() re-reads playbackDuration()).
+const spd=el('spd');
+function paintSpeed(){
+  speedMul=Math.pow(2,+spd.value);
+  el('spdVal').textContent=(speedMul>=10?speedMul.toFixed(0):speedMul.toFixed(1))+'×';
+  spd.style.setProperty('--fill',(spd.value-spd.min)/(spd.max-spd.min)*100+'%');
+}
+spd.addEventListener('input',paintSpeed);
+paintSpeed();
 
 /* ================================================================
    11. BOOT
