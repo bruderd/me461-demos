@@ -214,6 +214,14 @@ moving dotted lines, preset chips removed. Re-verified: `node --check` clean, 33
 headless probe drove default + P+feed-forward (playback to end: c₂→1.00, u→0.50 = k₀/b₀·y_d; ts 3.5/os 13.1/
 SS 1.000) confirming both stacked canvases exist at 186 px, `exChips===0`, and **no JS errors**; screenshot
 shows the dotted flow lines + the two-plot response panel.
+**4th pass (this session):** fixed the reported "u-arrow dots run backwards" bug — the dot offset was
+`(simT·speed)%1` with `speed=1.5·f` the *instantaneous* normalized flux, so as a flow decayed (u → steady
+state) the product could *decrease* and the dotted line slid backward even though every arrow's flux is ≥0.
+Replaced it with the **time-integral** `∫₀ᵗ1.5·f dτ`, precomputed per arrow in `buildSim` as
+`S.phase.{u,k0,k1,k2}[i]` and read via `curIdx()` (so scrubbing stays consistent); monotonic non-decreasing
+⇒ dots only advance or pause. Re-verified: `node --check` clean, 33/33 asserts still pass (no regression),
+and an inline check confirmed the NEW integrated phase is monotonic (final 7.780 cycles) while the OLD
+`simT·speed` formula reversed (worst step −0.0079 cycles) on the P+feed-forward run.
 
 ### Status: Laplace Transform Explorer is DONE + verified — NOT committed.
 - Files: `demos/laplace/index.html` (self-contained single file) and its landing-page card in
