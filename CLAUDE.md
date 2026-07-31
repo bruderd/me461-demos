@@ -88,6 +88,12 @@ teaching artifact. The reference implementation is `demos/cruise-control/index.h
       whose arrows render as moving dotted lines (speed ∝ flux) + crimson colorbar (35%), and a centered
       patient body/heart cartoon on the same scale (15%); 2% settling time + % overshoot at the bottom.
       (No preset controller chips — the u box is edited by hand.)
+- [x] Nyquist Stability Explorer (`demos/nyquist/`) — type a rational loop TF L(s) with a gain k (free-expression
+      parser in s & k), sweep k on a slider (user-set min/max). Bode plot of L(jω) sits right of the L(s) box. Below,
+      two complex planes: (left) the clockwise Nyquist D-contour with pole/zero markers, small rightward indentations
+      around jω-axis poles (kept outside), and a dotted ∞-arc; (right) the autoscaled Nyquist plot with −1 marked. A
+      single cursor rides the contour (draggable on ANY of the three plots, or auto-traced clockwise); the +jω axis,
+      the Bode curves, and the corresponding Nyquist arc all share maize. Full stability readout Z = N + P (+ GM/PM).
 - [ ] DC motor (position/speed control; V→current→torque).
 - [ ] Inverted pendulum / cart-pole (stabilization; nonlinear, great for state feedback).
 - [ ] Ball & beam.
@@ -124,11 +130,116 @@ Keep all of them on the same skeleton so students recognize the interface across
 
 ---
 
-## Session resume notes (last updated 2026-07-26)
+## Session resume notes (last updated 2026-07-30)
 
 Where we left off, so the conversation can be cleared and resumed later.
 
-### Status: Two-Compartment Drug Delivery is DONE + verified — NOT committed (NEWEST work).
+### Status: Nyquist Stability Explorer is DONE + verified — NOT committed (NEWEST work).
+- Files: `demos/nyquist/index.html` (self-contained single file) and its landing-page card in `index.html`
+  (added, right after the Two-Compartment Drug Delivery card). Roadmap checkbox above ticked. Live target once
+  pushed: `https://danielbruder.com/me461-demos/demos/nyquist/`. Still uncommitted with all prior work; standing
+  rule unchanged (commit/push only when asked; verify git state first — working dir may not be git root).
+
+**Design decisions the user chose** (asked up front via multiple-choice, all "recommended" picks):
+- **L(s) input = free expression** in `s` and `k` (reuses the Laplace demo's recursive-descent parser, with
+  `s`→`svar`, `k`→`kparam`). Two uses of the AST: `evalL(node,s,kv)` (complex evaluator, drives every plot) and
+  `buildRational(node,kv)` (expands to numeric num(s)/den(s) polynomials with k substituted → poles/zeros via a
+  hand-rolled root finder). Non-rational input (e.g. `exp(-s)`) throws `NONRAT` → flagged, no poles/zeros.
+- **k slider** (user-set min/max): k may appear anywhere in L(s); as k moves, EVERYTHING recomputes live and the
+  **−1 point stays fixed** so you watch it gain/lose encirclements. `rebuild(false)` on k-change keeps the two
+  plane views fixed (only expr-change / Fit re-autoscales) — that's the whole pedagogy, do NOT re-fit on k.
+- **Full stability readout** Z = N + P with STABLE/UNSTABLE verdict + gain/phase margins (from the Bode curves).
+- **Bode cursor hides off the +jω segment** — the Bode marker only shows while the contour cursor is on `posjw`.
+
+**What it is.** Top card: L(s) box + k slider (with min/max/exact-k boxes) + live poles(×)/zeros(○) list on the
+left; **Bode plot of L(jω)** (stacked |L| dB / ∠L deg, log-ω, 0 dB & −180° reference lines) on the right. Cursor
+card: **Trace** (play/pause) + ⟲ + speed slider (log₂, same pattern as siblings) + readouts (segment, s, L(s),
+|L|·∠L, 1+L). Then a 2-col grid: (left) **s-plane D-contour**, (right) **Nyquist plot**. Bottom: stability strip
+(P, N, Z, verdict, GM, PM) + a marginal-stability note.
+
+**The D-contour** (`buildContour`) is one CLOCKWISE closed loop, point list tagged by segment `type`:
+`negjw`(cyan) up from −jR through the origin region, `posjw`(maize) up to +jR, then the `arc`(dotted gray) from
+θ=+π/2 down to −π/2 through +Re. **jω-axis poles get a small rightward semicircular `indent`** (dotted violet,
+radius ρ=clamp(0.04R, …, 0.4·minGap)) that bulges into the RHP so the pole stays OUTSIDE (excluded from P).
+Clockwise = up the whole jω axis then arc down through the RHP (verified, see below). Arc radius / axis extent
+**R = max(6, 1.8·max|pole|,|zero|,closed-loop pole|)** — depends on the CLOSED-loop poles (roots of den+num) so
+the contour always encloses them ⇒ the encirclement count stays correct even at large k. Axis sampling is
+log-clustered near ω≈0 plus extra points around each corner freq (magnitudes of poles/zeros).
+
+**Non-obvious plumbing / gotchas (don't re-break).**
+- **Winding sign.** `windingNumber` sums Δarg of (L+1) around the closed contour with **adaptive subdivision in s**
+  (re-eval L at chord midpoints when a step turns >0.7 rad) → CCW turns; **N = −round(CCW)** = clockwise
+  encirclements of −1; **Z = N + P**, P = open-loop poles with Re>tol (indented jω poles NOT counted). The sign
+  was VERIFIED in the logic test against the ground-truth closed-loop RHP pole count (roots of den+num) across
+  k∈{1,2,4,6,8,10,20} for `k/(s(s+1)(s+2))` (stable k<6 → N=0/Z=0; k>6 → N=2/Z=2). If ever "flipped", negate N.
+- **Pole/zero cancellation.** `cancelCommon` removes matched pole/zero pairs (tol ∝ scale) before counting P /
+  drawing markers, so e.g. `k(s−1)/((s−1)(s+2))` correctly shows P=0 (no spurious RHP pole). `evalL` uses the raw
+  expression, so it stays consistent (the common factor cancels numerically off the contour).
+- **Cursor = a single index `ci` into `contour.pts`** — the ONE source of truth. Dragging on the D-plane picks the
+  nearest contour point; on the Nyquist plane the nearest `Lpts` point; on the Bode plane the nearest `posjw` point
+  by log-ω. Trace advances a fraction `frac` (frac·n→ci) at 0.12·speedMul loops/s; `dragging` flag pauses it.
+- **Bode phase dot** reads the UNWRAPPED `bode.ph[]` array (via `nearestPh`), NOT `carg(L)` — the curve is unwrapped
+  so a raw wrapped angle would sit 360° off.
+- **Rendering is cheap enough to full-redraw each trace frame**: the contour/Nyquist are drawn as **runs batched by
+  segment type** (`drawRuns` — one stroke per contiguous same-type run, dotted for indent/arc), ~4–6 strokes each,
+  so no offscreen caching is needed. `Lpts` (L at every contour point) is cached at rebuild, not per frame.
+- Greek/subscripts (σ, ω, L(s), y_d-style) inside uppercased `.card h2`/`.k`/`.lbl` are wrapped in
+  `.lc{text-transform:none}` — same finding as the sibling demos. s-entry number fields use `.nospin`.
+
+**Verified this session** (scratchpad, reusable): `node --check` clean on the extracted script; **31/31 logic
+asserts** (`test_logic.mjs` — evalL, rational expansion coeffs, Durand-Kerner roots, canonical N/Z across k vs
+closed-loop RHP count, RHP-pole P=1, cancellation, non-rational rejection, contour has all 4 segment types +
+origin indent bulges into RHP + starts at −jR, GM/PM signs). Headless-Chrome (Chrome.app `--headless=new
+--dump-dom`, error catcher + a RESULT-div probe): **no JS errors**, all three canvases draw, default k=2 →
+STABLE (N=0,Z=0,GM=9.5dB,PM=32.6°), driving kBox→10 → UNSTABLE (N=2,Z=2), expr→`k/((s-1)(s+2))` → P=1,
+expr→`k*exp(-s)/(s+1)` → flagged bad (no crash). Screenshots confirm the layout, color-matched segments across
+all three plots, the R→∞ dotted arc, the origin indentation, and the −1 marker.
+
+### Status: Playback-speed sliders + Reset-view buttons added — DONE + verified — NOT committed (was NEWEST; see above).
+Cross-demo UX polish (two user requests), not a new system. All prior uncommitted work is still uncommitted;
+standing rule unchanged (commit/push only when asked; verify git state first — working dir may not be git root).
+
+**Request 1 — speed slider on `demos/phase-portrait/`** (students shouldn't wait out each trajectory in real
+time). **Request 2 — same slider on `demos/linearization/`, plus a Reset-view button on any demo lacking one.**
+
+**Speed slider (shared design, now in phase-portrait + linearization; drug-delivery & sum-of-exponentials
+already had their own playback-speed sliders).** Log₂ mapping: the `<input type=range>` *value is the exponent*,
+`speedMul = 2^value`; `min=-1` (0.5×) … `max=4` (16×), `step=0.05`, default `value=0` (**1×, so base behavior
+is unchanged until touched**). `playbackDuration()` — the wall-clock animation length `clamp(T,2.5,9)` — is
+**divided by `speedMul`**. Because `step(now)` re-reads `playbackDuration()` every frame and the slider is never
+disabled, **speed is adjustable mid-animation**. `paintSpeed()` updates the `spdVal` readout (`16×`→`toFixed(0)`,
+else `toFixed(1)`) and sets the track-fill CSS var `--fill = (value-min)/(max-min)*100 + '%'`. Markup lives in
+`.btns` as a `.speed` flex column (`min-width:158px`) with a `.k` label (`Playback speed <b id=spdVal>1.0×</b>`).
+In linearization `playbackDuration` was already an arrow fn → just appended `/speedMul`; in phase-portrait it's a
+`function`. Both keep `let speedMul=1;` beside the other anim state.
+
+**Reset-view button** — added to **phase-portrait** and **linearization** only. Pattern: the default phase
+window(s) are frozen as immutable consts and the *live* view objects are spread-clones of them; the button does
+`Object.assign(view, VIEW0)`, re-syncs the axis-entry input fields, re-renders, and sets a status line. It
+**leaves traces, IC, and duration untouched**. Phase-portrait: `const VIEW0={x1min:-7,x1max:7,x2min:-5,x2max:5}`
+→ `const view={...VIEW0}`. Linearization: **one shared button** resets all three windows — `VIEWL0` (nonlinear
+x-space) + `VIEWR0.{xt,x}` (linear demo, per coordinate-frame) — via `Object.assign` on each, then
+`syncAxisFields(); renderAll();`. (Chose a single shared button over per-panel, since the matched L/R pair shares
+one IC/duration; flagged to user, who was fine with it.)
+
+**Reset-view survey (why only those two got the button).** Checked all seven demos: **complex-exponential**
+already has `Fit ⤢` + `Reset view`; **laplace** has two `Reset view` buttons (3-D surface + s-plane);
+**sum-of-exponentials** has `Fit ⤢`, which frames all data (functionally a reset — its complex value plane has no
+fixed default distinct from the data bbox, so a separate "Reset view" would just re-do Fit; **left as-is**, user
+offered an explicit relabel if wanted). **cruise-control** (auto follow-camera; its "Reset" resets the *sim*) and
+**drug-delivery** (static precomputed plots + scrubbers) have **no pannable/zoomable view to reset**. So only
+phase-portrait and linearization genuinely lacked view restoration.
+
+**Verified this session** (scratchpad, reusable): `node --check` clean on both edited files. Headless-Chrome
+(Chrome.app `--headless=new --disable-gpu --timeout=8000 --virtual-time-budget=4000 --dump-dom`; the probe must
+be injected **inside the same `<script>`** before `</script>` to share lexical scope with the top-level `const`s
+— plain script, not a module, so they aren't on `window` — auto-run on `load` via `setTimeout`, writing results
+into a `<div id=RESULT>` that `--dump-dom | grep -o 'RESULT=[^<]*'` reads back). Results, **no JS errors** both:
+linearization → `defLabel 1.0× / dur1x 9s / max 16× / dur16x 0.5625s / min 0.5×`, and Reset view restored
+`viewL`+`viewR.xt`+`viewR.x` and re-synced the `lx1min` field to `-1`; phase-portrait → Reset view restored the
+default window and synced `x1min` to `-7`.
+
+### Status: Two-Compartment Drug Delivery is DONE + verified — NOT committed (was NEWEST; see above).
 - Files: `demos/drug-delivery/index.html` (self-contained single file) and its landing-page card in
   `index.html` (added, right after the Laplace card). Roadmap checkbox above ticked. Live target once
   pushed: `https://danielbruder.com/me461-demos/demos/drug-delivery/`.

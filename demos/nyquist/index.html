@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MECHENG 461 · Nyquist Stability Explorer</title>
+<style>
+  :root{
+    --navy:#00274C; --navy-2:#0A1B33; --panel:#102A4C;
+    --maize:#FFCB05; --cyan:#57C7FF; --violet:#B98CFF; --ink:#EAF1FB; --muted:#8AA6C6;
+    --grid:rgba(138,166,198,.16); --good:#5BD6A0; --bad:#FF6B6B;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--navy-2)}
+  body{background:linear-gradient(180deg,#0B1A30,#08111F 60%);color:var(--ink);font-family:var(--sans);
+       -webkit-font-smoothing:antialiased;padding:22px;min-height:100vh}
+  .wrap{max-width:1180px;margin:0 auto}
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:4px}
+  header .tag{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--maize);
+              border:1px solid rgba(255,203,5,.35);padding:3px 8px;border-radius:4px}
+  h1{font-size:20px;font-weight:650;margin:0;letter-spacing:.01em}
+  header .sub{color:var(--muted);font-size:13px}
+  .card{background:linear-gradient(180deg,var(--panel),#0C2140);border:1px solid rgba(138,166,198,.16);
+        border-radius:12px;padding:14px;margin-top:16px}
+  .card h2{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+           color:var(--muted);margin:0 0 10px;font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .card h2 .note{font-family:var(--sans);letter-spacing:0;text-transform:none;font-size:11px;color:var(--muted);font-weight:400}
+  .card h2 .m{text-transform:none;letter-spacing:.02em;font-size:12px}
+  .lc{text-transform:none}
+  canvas{display:block;width:100%;border-radius:8px}
+
+  input[type=text],input[type=number]{background:#08182f;color:#cfe3ff;border:1px solid rgba(138,166,198,.2);
+    border-radius:8px;padding:8px 9px;font-family:var(--mono);font-size:14px;width:100%}
+  input[type=text]:focus,input[type=number]:focus{outline:none;border-color:rgba(255,203,5,.6)}
+  input.bad{border-color:var(--bad)!important;background:#2a1416}
+  input.nospin{-moz-appearance:textfield;appearance:textfield}
+  input.nospin::-webkit-inner-spin-button,input.nospin::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+  code{font-family:var(--mono);background:#0a1d38;padding:1px 5px;border-radius:4px;font-size:12px}
+
+  .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-bottom:5px;display:block}
+  .lbl .lc{text-transform:none}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  .hint{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .hint code{font-size:11px}
+
+  button{font-family:var(--sans);font-size:13px;font-weight:600;border:1px solid rgba(138,166,198,.25);
+    background:#122f52;color:var(--ink);padding:9px 15px;border-radius:8px;cursor:pointer;transition:.12s}
+  button:hover{background:#173a66}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.mini{padding:6px 10px;font-size:12px}
+  button.go{background:var(--maize);color:#08213f;border-color:transparent}
+  button.go:hover{filter:brightness(1.05)}
+  button.on{background:var(--good);color:#08213f;border-color:transparent}
+  .btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+  /* top: L(s) definition (left) + Bode (right) */
+  .topgrid{display:grid;grid-template-columns:1fr 1.25fr;gap:16px;align-items:stretch}
+  @media(max-width:900px){.topgrid{grid-template-columns:1fr}}
+  .topgrid>.sub{display:flex;flex-direction:column;gap:12px;min-width:0}
+  #bode{background:linear-gradient(180deg,#0d2140,#0a1526);height:360px;cursor:crosshair;touch-action:none}
+
+  /* k slider */
+  .krow{display:flex;flex-direction:column;gap:7px}
+  .khead{display:flex;align-items:baseline;gap:8px;justify-content:space-between}
+  .kval{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--maize)}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:6px;
+    background:linear-gradient(90deg,var(--maize) 0 var(--fill,20%),rgba(138,166,198,.22) var(--fill,20%) 100%);outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;
+    background:var(--maize);border:2px solid #0a1526;cursor:pointer;box-shadow:0 0 0 1px rgba(255,203,5,.5)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--maize);border:2px solid #0a1526;cursor:pointer}
+  .kends{display:flex;gap:8px;align-items:center}
+  .kends .field{flex:0 0 auto}.kends input{width:72px}
+  .kends .spacer{flex:1 1 auto}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  .grid>.card{margin-top:0}
+  #dplane{background:radial-gradient(120% 120% at 50% 50%,#0d2a52,#0a1830);height:420px;cursor:crosshair;touch-action:none}
+  #nyq{background:radial-gradient(120% 120% at 50% 50%,#0d2a52,#0a1830);height:420px;cursor:crosshair;touch-action:none}
+
+  .ctrls{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .speed{display:flex;flex-direction:column;gap:4px;min-width:170px}
+  .speed .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+
+  /* readout tiles */
+  .ros{display:flex;gap:8px;flex-wrap:wrap}
+  .ro{background:#0A1D38;border:1px solid rgba(138,166,198,.14);border-radius:8px;padding:6px 10px;min-width:0}
+  .ro .k{font-family:var(--mono);font-size:9px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+  .ro .v{font-family:var(--mono);font-size:14px;font-weight:600;margin-top:2px}
+  .ro.seg .v{display:flex;align-items:center;gap:6px}
+  .swatch{width:11px;height:11px;border-radius:2px;display:inline-block;flex:0 0 auto}
+
+  .axisrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 9px;min-height:30px}
+  .status{font-size:12px;color:var(--muted);min-height:15px;margin-top:8px}
+  .status.warn{color:var(--maize)}
+
+  /* stability strip */
+  .stab{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch}
+  .stab .cell{background:#0A1D38;border:1px solid rgba(138,166,198,.14);border-radius:10px;padding:9px 13px;min-width:96px}
+  .stab .cell .k{font-family:var(--mono);font-size:9px;letter-spacing:.09em;color:var(--muted);text-transform:uppercase}
+  .stab .cell .v{font-family:var(--mono);font-size:19px;font-weight:700;margin-top:3px}
+  .stab .cell.verdict{min-width:150px;display:flex;flex-direction:column;justify-content:center}
+  .stab .cell.verdict .v{font-size:17px}
+  .stab .cell.verdict.good{background:rgba(91,214,160,.14);border-color:rgba(91,214,160,.4)}
+  .stab .cell.verdict.good .v{color:var(--good)}
+  .stab .cell.verdict.bad{background:rgba(255,107,107,.14);border-color:rgba(255,107,107,.4)}
+  .stab .cell.verdict.bad .v{color:var(--bad)}
+  .stab .cell.eq{justify-content:center;display:flex;flex-direction:column}
+  .stab .cell.eq .v{font-size:15px;color:var(--muted)}
+  .stab .cell.eq .v b{color:var(--ink)}
+
+  footer{color:var(--muted);font-size:12px;margin-top:18px;line-height:1.6}
+  footer b{color:var(--ink);font-weight:600}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:8px}
+  .legend span{display:flex;align-items:center;gap:5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="tag">MECHENG&nbsp;461</span>
+    <h1>Nyquist Stability Explorer</h1>
+    <span class="sub">map the D-contour through L(s) and count encirclements of −1</span>
+  </header>
+
+  <!-- ============ L(s) + BODE ============ -->
+  <div class="card">
+    <h2>loop transfer function <span class="m">L(s)</span> <span class="note">rational in <span class="lc">s</span>, with a gain <span class="lc">k</span> you can sweep</span></h2>
+    <div class="topgrid">
+      <div class="sub">
+        <div class="field">
+          <label class="lbl" for="expr"><span class="lc">L(s) =</span></label>
+          <input id="expr" type="text" spellcheck="false" value="k/(s*(s+1)*(s+2))">
+        </div>
+        <div class="krow">
+          <div class="khead"><span class="lbl" style="margin:0"><span class="lc">gain k</span></span><span class="kval" id="kVal">2.00</span></div>
+          <input id="kSlider" type="range">
+          <div class="kends">
+            <div class="field"><span class="k">min</span><input id="kMin" class="nospin" type="number" step="any" value="0"></div>
+            <div class="field"><span class="k">max</span><input id="kMax" class="nospin" type="number" step="any" value="12"></div>
+            <span class="spacer"></span>
+            <div class="field"><span class="k"><span class="lc">k</span> =</span><input id="kBox" class="nospin" type="number" step="any" value="2"></div>
+          </div>
+        </div>
+        <div class="ros">
+          <div class="ro" style="flex:1 1 100%"><div class="k">poles of L(s)  (×)</div><div class="v" id="roPoles">—</div></div>
+          <div class="ro" style="flex:1 1 100%"><div class="k">zeros of L(s)  (○)</div><div class="v" id="roZeros">—</div></div>
+        </div>
+        <div class="hint" id="hint">
+          Build L(s) from <code>s</code>, <code>k</code>, numbers and <code>+ − * / ^</code> — e.g.
+          <code>k/(s*(s+1)*(s+2))</code>, <code>k(s+2)/(s^2+s+4)</code>, <code>k/(s^2*(s+3))</code>.
+          Poles &amp; zeros are found numerically; poles on the jω axis get a small rightward indentation.
+        </div>
+      </div>
+      <div class="card" style="margin:0;display:flex;flex-direction:column">
+        <h2>Bode plot of <span class="m">L(jω)</span> <span class="note">the positive jω axis · drag to move the cursor</span></h2>
+        <canvas id="bode" style="flex:1 1 0"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CURSOR CONTROLS ============ -->
+  <div class="card">
+    <h2>cursor <span class="note">drag it on any plot, or trace the whole D-contour clockwise</span></h2>
+    <div class="ctrls">
+      <div class="btns">
+        <button id="trace" class="go">▶ Trace</button>
+        <button id="restart" class="mini">⟲</button>
+      </div>
+      <div class="speed">
+        <span class="k">Trace speed <b id="spdVal" class="lc">1.0×</b></span>
+        <input id="spd" type="range" min="-1" max="4" step="0.05" value="0">
+      </div>
+      <div class="ros" style="flex:1 1 auto">
+        <div class="ro seg"><div class="k">on contour</div><div class="v" id="roSeg"><span class="swatch" id="segSw"></span><span id="segName">—</span></div></div>
+        <div class="ro"><div class="k">s</div><div class="v" id="roS">—</div></div>
+        <div class="ro"><div class="k">L(s)</div><div class="v" id="roL">—</div></div>
+        <div class="ro"><div class="k">|L|  ·  ∠L</div><div class="v" id="roLmag">—</div></div>
+        <div class="ro"><div class="k">1 + L(s)</div><div class="v" id="roOL">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ D-CONTOUR + NYQUIST ============ -->
+  <div class="grid">
+    <div class="card">
+      <h2>s-plane · Nyquist D-contour <span class="note">wheel = zoom · drag background = pan</span></h2>
+      <div class="axisrow">
+        <button id="fitD" class="mini">Fit</button>
+        <span class="status" id="dStatus" style="margin:0"></span>
+      </div>
+      <canvas id="dplane"></canvas>
+      <div class="legend">
+        <span><span class="swatch" style="background:var(--maize)"></span>+jω (→ Bode)</span>
+        <span><span class="swatch" style="background:var(--cyan)"></span>−jω</span>
+        <span><span class="swatch" style="background:var(--violet)"></span>indent (dotted)</span>
+        <span><span class="swatch" style="background:var(--muted)"></span>∞-arc (dotted)</span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Nyquist plot · <span class="m">L(s)</span> plane <span class="note">−1 marked · autoscaled</span></h2>
+      <div class="axisrow">
+        <button id="fitN" class="mini">Fit</button>
+        <span class="status" id="nStatus" style="margin:0"></span>
+      </div>
+      <canvas id="nyq"></canvas>
+      <div class="legend">
+        <span>colors match the D-contour segment that produced each part of the curve</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ STABILITY ============ -->
+  <div class="card">
+    <h2>Nyquist stability criterion <span class="note"><span class="lc">Z = N + P</span> · closed loop is stable ⟺ Z = 0</span></h2>
+    <div class="stab">
+      <div class="cell"><div class="k">P — open-loop RHP poles</div><div class="v" id="stP">—</div></div>
+      <div class="cell"><div class="k">N — CW encirclements of −1</div><div class="v" id="stN">—</div></div>
+      <div class="cell eq"><div class="k">Z = N + P</div><div class="v"><b id="stZ">—</b> closed-loop RHP poles</div></div>
+      <div class="cell verdict" id="stVerdict"><div class="k">verdict</div><div class="v" id="stVtext">—</div></div>
+      <div class="cell"><div class="k">gain margin</div><div class="v" id="stGM">—</div></div>
+      <div class="cell"><div class="k">phase margin</div><div class="v" id="stPM">—</div></div>
+    </div>
+    <div class="status" id="stNote"></div>
+  </div>
+
+  <footer>
+    <b>How it works.</b>&nbsp; The Nyquist D-contour encircles the entire right-half s-plane <b>clockwise</b>: up the
+    imaginary axis (with tiny rightward detours around any poles sitting on it, so they stay <em>outside</em>), then a
+    semicircle of radius R → ∞ (dotted). Mapping this contour through L(s) gives the Nyquist plot. By the argument
+    principle, the number of <b>clockwise encirclements of −1</b>, <b>N</b>, plus the open-loop RHP poles <b>P</b>, equals
+    <b>Z</b> — the number of closed-loop poles in the right-half plane. The loop is stable when Z = 0. The Bode plot is
+    exactly the positive-jω part of the contour (same maize color), so gain and phase margins are the distances to the −1
+    point read off in the frequency domain. Everything runs client-side.
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ================================================================
+   0. COMPLEX ARITHMETIC  (complex numbers are [re, im])
+   ================================================================ */
+const C=(re,im)=>[re,im||0];
+const cadd=(a,b)=>[a[0]+b[0],a[1]+b[1]];
+const csub=(a,b)=>[a[0]-b[0],a[1]-b[1]];
+const cmul=(a,b)=>[a[0]*b[0]-a[1]*b[1], a[0]*b[1]+a[1]*b[0]];
+const cscale=(a,k)=>[a[0]*k,a[1]*k];
+function cdiv(a,b){const d=b[0]*b[0]+b[1]*b[1];return [(a[0]*b[0]+a[1]*b[1])/d,(a[1]*b[0]-a[0]*b[1])/d];}
+const cabs=a=>Math.hypot(a[0],a[1]);
+const carg=a=>Math.atan2(a[1],a[0]);
+function cexp(a){const e=Math.exp(a[0]);return [e*Math.cos(a[1]),e*Math.sin(a[1])];}
+function clog(a){return [Math.log(Math.hypot(a[0],a[1])), Math.atan2(a[1],a[0])];}
+function cpow(a,b){
+  if(Math.abs(b[1])<1e-14 && Math.abs(b[0]-Math.round(b[0]))<1e-12){
+    let k=Math.round(b[0]); if(k===0) return [1,0];
+    let base=(k<0)?cdiv([1,0],a):a, r=[1,0]; k=Math.abs(k);
+    for(let i=0;i<k;i++) r=cmul(r,base); return r;
+  }
+  if(a[0]===0&&a[1]===0) return (b[0]>0)?[0,0]:[NaN,NaN];
+  return cexp(cmul(b,clog(a)));
+}
+function csin(a){return [Math.sin(a[0])*Math.cosh(a[1]), Math.cos(a[0])*Math.sinh(a[1])];}
+function ccos(a){return [Math.cos(a[0])*Math.cosh(a[1]), -Math.sin(a[0])*Math.sinh(a[1])];}
+function csinh(a){return [Math.sinh(a[0])*Math.cos(a[1]), Math.cosh(a[0])*Math.sin(a[1])];}
+function ccosh(a){return [Math.cosh(a[0])*Math.cos(a[1]), Math.sinh(a[0])*Math.sin(a[1])];}
+const ctan=a=>cdiv(csin(a),ccos(a));
+const ctanh=a=>cdiv(csinh(a),ccosh(a));
+function csqrt(a){const r=Math.hypot(a[0],a[1]),re=Math.sqrt((r+a[0])/2);let im=Math.sqrt((r-a[0])/2);if(a[1]<0)im=-im;return [re,im];}
+
+/* ================================================================
+   1. PARSER  —  L(s) expression → AST   (s = complex variable, k = gain)
+   ================================================================ */
+const FUNCS={exp:1,sin:1,cos:1,tan:1,sinh:1,cosh:1,tanh:1,sqrt:1,log:1,ln:1,abs:1};
+function tokenize(str){
+  const toks=[]; let i=0; const s=str;
+  const isd=c=>c>='0'&&c<='9', isa=c=>(c>='a'&&c<='z')||(c>='A'&&c<='Z');
+  while(i<s.length){
+    const c=s[i];
+    if(c===' '||c==='\t'){i++;continue;}
+    if(isd(c)||(c==='.'&&isd(s[i+1]))){
+      let j=i+1; while(j<s.length&&(isd(s[j])||s[j]==='.'))j++;
+      if(s[j]==='e'||s[j]==='E'){ let k=j+1; if(s[k]==='+'||s[k]==='-')k++; if(isd(s[k])){ j=k+1; while(j<s.length&&isd(s[j]))j++; } }
+      toks.push({t:'num',v:parseFloat(s.slice(i,j))}); i=j; continue;
+    }
+    if(isa(c)){ let j=i+1; while(j<s.length&&isa(s[j]))j++; toks.push({t:'name',v:s.slice(i,j).toLowerCase()}); i=j; continue; }
+    if('+-*/^()'.includes(c)){ toks.push({t:c}); i++; continue; }
+    throw new Error('unexpected character "'+c+'"');
+  }
+  toks.push({t:'end'}); return toks;
+}
+function parse(str){
+  const toks=tokenize(str); let pos=0;
+  const peek=()=>toks[pos], next=()=>toks[pos++];
+  const startsFactor=()=>{const t=peek().t; return t==='num'||t==='name'||t==='(';};
+  function parseExpr(){
+    let a=parseTerm();
+    while(peek().t==='+'||peek().t==='-'){const op=next().t; const b=parseTerm(); a={type:op==='+'?'add':'sub',a,b};}
+    return a;
+  }
+  function parseTerm(){
+    let a=parseUnary();
+    for(;;){
+      if(peek().t==='*'||peek().t==='/'){const op=next().t; const b=parseUnary(); a={type:op==='*'?'mul':'div',a,b};}
+      else if(startsFactor()){ const b=parseUnary(); a={type:'mul',a,b}; }
+      else break;
+    }
+    return a;
+  }
+  function parseUnary(){
+    if(peek().t==='+'){next(); return parseUnary();}
+    if(peek().t==='-'){next(); return {type:'neg',a:parseUnary()};}
+    return parsePow();
+  }
+  function parsePow(){
+    let a=parseAtom();
+    if(peek().t==='^'){ next(); const b=parseUnary(); return {type:'pow',a,b}; }
+    return a;
+  }
+  function parseAtom(){
+    const tk=peek();
+    if(tk.t==='num'){next(); return {type:'num',v:[tk.v,0]};}
+    if(tk.t==='('){next(); const e=parseExpr(); if(peek().t!==')') throw new Error('missing ")"'); next(); return e;}
+    if(tk.t==='name'){
+      next(); const nm=tk.v;
+      if(peek().t==='('){
+        if(!FUNCS[nm]) throw new Error('unknown function "'+nm+'"');
+        next(); const arg=parseExpr(); if(peek().t!==')') throw new Error('missing ")" after '+nm); next();
+        return {type:'call',name:nm,arg};
+      }
+      if(nm==='s') return {type:'svar'};
+      if(nm==='k') return {type:'kparam'};
+      if(nm==='pi') return {type:'num',v:[Math.PI,0]};
+      if(nm==='e')  return {type:'num',v:[Math.E,0]};
+      if(nm==='j'||nm==='i') return {type:'num',v:[0,1]};
+      throw new Error('unknown symbol "'+nm+'" (use s, k, numbers)');
+    }
+    throw new Error('unexpected '+(tk.t==='end'?'end of input':'"'+tk.t+'"'));
+  }
+  const ast=parseExpr();
+  if(peek().t!=='end') throw new Error('unexpected "'+peek().t+'"');
+  return ast;
+}
+
+/* ================================================================
+   2. NUMERIC EVALUATION of L(s)  (walk the AST in complex arithmetic)
+   ================================================================ */
+const CFUN={exp:cexp,sin:csin,cos:ccos,tan:ctan,sinh:csinh,cosh:ccosh,tanh:ctanh,sqrt:csqrt,
+           log:clog,ln:clog,abs:a=>[cabs(a),0]};
+function evalL(node,s,kv){
+  switch(node.type){
+    case 'num': return node.v;
+    case 'svar': return s;
+    case 'kparam': return [kv,0];
+    case 'neg': return cscale(evalL(node.a,s,kv),-1);
+    case 'add': return cadd(evalL(node.a,s,kv),evalL(node.b,s,kv));
+    case 'sub': return csub(evalL(node.a,s,kv),evalL(node.b,s,kv));
+    case 'mul': return cmul(evalL(node.a,s,kv),evalL(node.b,s,kv));
+    case 'div': return cdiv(evalL(node.a,s,kv),evalL(node.b,s,kv));
+    case 'pow': return cpow(evalL(node.a,s,kv),evalL(node.b,s,kv));
+    case 'call': return CFUN[node.name](evalL(node.arg,s,kv));
+  }
+  throw new Error('bad node');
+}
+
+/* ================================================================
+   3. RATIONAL EXPANSION  —  AST + numeric k → num(s)/den(s) polynomials
+      Polys are arrays of complex coeffs, index = power (low → high).
+      Non-rational subexpressions throw NONRAT → poles/zeros unavailable.
+   ================================================================ */
+const NONRAT={nonrat:true};
+function polyStrip(a){let n=a.length;while(n>1&&cabs(a[n-1])<1e-13)n--;return a.slice(0,n);}
+function polyAdd(a,b){const n=Math.max(a.length,b.length),r=[];for(let i=0;i<n;i++)r.push(cadd(a[i]||[0,0],b[i]||[0,0]));return r;}
+function polyMul(a,b){const r=[];for(let i=0;i<a.length+b.length-1;i++)r.push([0,0]);
+  for(let i=0;i<a.length;i++)for(let j=0;j<b.length;j++)r[i+j]=cadd(r[i+j],cmul(a[i],b[j]));return r;}
+function polyNeg(a){return a.map(c=>cscale(c,-1));}
+const ratConst=c=>({n:[c],d:[[1,0]]});
+const ratS=()=>({n:[[0,0],[1,0]],d:[[1,0]]});
+const ratAdd=(x,y)=>({n:polyAdd(polyMul(x.n,y.d),polyMul(y.n,x.d)),d:polyMul(x.d,y.d)});
+const ratSub=(x,y)=>({n:polyAdd(polyMul(x.n,y.d),polyNeg(polyMul(y.n,x.d))),d:polyMul(x.d,y.d)});
+const ratMul=(x,y)=>({n:polyMul(x.n,y.n),d:polyMul(x.d,y.d)});
+const ratDiv=(x,y)=>({n:polyMul(x.n,y.d),d:polyMul(x.d,y.n)});
+function ratIsConst(r){return polyStrip(r.n).length<=1 && polyStrip(r.d).length<=1;}
+function ratConstVal(r){return cdiv(polyStrip(r.n)[0]||[0,0], polyStrip(r.d)[0]||[1,0]);}
+function ratPowInt(r,e){let base=r;if(e<0){base=ratDiv(ratConst([1,0]),r);e=-e;}let out=ratConst([1,0]);for(let i=0;i<e;i++)out=ratMul(out,base);return out;}
+function buildRational(node,kv){
+  switch(node.type){
+    case 'num': return ratConst(node.v);
+    case 'svar': return ratS();
+    case 'kparam': return ratConst([kv,0]);
+    case 'neg': {const r=buildRational(node.a,kv);return {n:polyNeg(r.n),d:r.d};}
+    case 'add': return ratAdd(buildRational(node.a,kv),buildRational(node.b,kv));
+    case 'sub': return ratSub(buildRational(node.a,kv),buildRational(node.b,kv));
+    case 'mul': return ratMul(buildRational(node.a,kv),buildRational(node.b,kv));
+    case 'div': return ratDiv(buildRational(node.a,kv),buildRational(node.b,kv));
+    case 'pow':{
+      const A=buildRational(node.a,kv), E=buildRational(node.b,kv);
+      if(!ratIsConst(E)) throw NONRAT;
+      const e=ratConstVal(E);
+      if(Math.abs(e[1])<1e-12 && Math.abs(e[0]-Math.round(e[0]))<1e-9){return ratPowInt(A,Math.round(e[0]));}
+      if(ratIsConst(A)) return ratConst(cpow(ratConstVal(A),e));
+      throw NONRAT;
+    }
+    case 'call':{
+      const A=buildRational(node.arg,kv);
+      if(!ratIsConst(A)) throw NONRAT;
+      return ratConst(CFUN[node.name](ratConstVal(A)));
+    }
+  }
+  throw NONRAT;
+}
+
+/* ================================================================
+   4. POLYNOMIAL ROOTS  (quadratic exact; Durand–Kerner otherwise)
+   ================================================================ */
+function polyRoots(coeffs){
+  let a=polyStrip(coeffs.slice());
+  const n=a.length-1;
+  if(n<=0) return [];
+  if(n===1) return [ cdiv(cscale(a[0],-1), a[1]) ];
+  if(n===2){
+    const A=a[2],B=a[1],Cc=a[0];
+    const disc=csqrt(csub(cmul(B,B), cscale(cmul(A,Cc),4)));
+    return [ cdiv(csub(cscale(B,-1),disc),cscale(A,2)), cdiv(cadd(cscale(B,-1),disc),cscale(A,2)) ];
+  }
+  const lead=a[n], m=a.map(c=>cdiv(c,lead));
+  let roots=[]; const seed=[0.4,0.9];
+  for(let i=0;i<n;i++) roots.push(cpow(seed,[i,0]));
+  for(let it=0;it<300;it++){
+    let maxd=0;
+    for(let i=0;i<n;i++){
+      let p=[0,0]; for(let d=n;d>=0;d--) p=cadd(cmul(p,roots[i]),m[d]);
+      let denom=[1,0];
+      for(let jx=0;jx<n;jx++) if(jx!==i) denom=cmul(denom,csub(roots[i],roots[jx]));
+      if(cabs(denom)<1e-300) continue;
+      const delta=cdiv(p,denom); roots[i]=csub(roots[i],delta); maxd=Math.max(maxd,cabs(delta));
+    }
+    if(maxd<1e-13) break;
+  }
+  return roots;
+}
+function cleanRoots(roots,scale){
+  const tol=1e-7*Math.max(1,scale);
+  return roots.map(r=>[Math.abs(r[0])<tol?0:r[0], Math.abs(r[1])<tol?0:r[1]]);
+}
+/* ================================================================
+   5. CANVAS PLUMBING  (equal-aspect fit shared by the 2-D planes)
+   ================================================================ */
+const el=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const PAD={l:44,t:14,r:16,b:26};
+function fitDPR(cv){
+  const dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight;
+  cv.width=w*dpr; cv.height=h*dpr;
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx,w,h,dpr};
+}
+function metricsOf(cv){const w=cv.clientWidth,h=cv.clientHeight;return {w,h,W:w-PAD.l-PAD.r,H:h-PAD.t-PAD.b};}
+function actual(cv,v){
+  const M=metricsOf(cv);
+  const boxW=Math.max(v.x1max-v.x1min,1e-9), boxH=Math.max(v.x2max-v.x2min,1e-9);
+  const cx=(v.x1min+v.x1max)/2, cy=(v.x2min+v.x2max)/2;
+  const s=Math.min(M.W/boxW,M.H/boxH), hw=M.W/s/2, hh=M.H/s/2;
+  return {M,s,x1min:cx-hw,x1max:cx+hw,x2min:cy-hh,x2max:cy+hh};
+}
+const D2P=(x,y,A)=>[PAD.l+(x-A.x1min)/(A.x1max-A.x1min)*A.M.W, PAD.t+(1-(y-A.x2min)/(A.x2max-A.x2min))*A.M.H];
+const P2D=(px,py,A)=>[A.x1min+(px-PAD.l)/A.M.W*(A.x1max-A.x1min), A.x2min+(1-(py-PAD.t)/A.M.H)*(A.x2max-A.x2min)];
+function niceStep(span,target){const raw=span/target,mag=Math.pow(10,Math.floor(Math.log10(raw))),n=raw/mag;return (n<1.5?1:n<3?2:n<7?5:10)*mag;}
+const fmt3=v=>!isFinite(v)?'∞':(Math.abs(v)>=1000||(Math.abs(v)<0.01&&v!==0))?v.toExponential(2):(Math.round(v*1000)/1000).toString();
+const fmtTick=v=>{const a=Math.abs(v);return a>=1000||(a<0.01&&a>0)?v.toExponential(0):(Math.round(v*100)/100).toString();};
+function fmtC(re,im){const r=fmt3(re);if(Math.abs(im)<1e-9)return r;return `${r} ${im<0?'−':'+'} ${fmt3(Math.abs(im))}j`;}
+function drawGrid(ctx,A,labX,labY,opt){
+  const M=A.M; opt=opt||{};
+  ctx.save(); ctx.beginPath(); ctx.rect(PAD.l,PAD.t,M.W,M.H); ctx.clip();
+  ctx.font='10px ui-monospace,monospace';
+  const sx=niceStep(A.x1max-A.x1min,8), sy=niceStep(A.x2max-A.x2min,7);
+  for(let x=Math.ceil(A.x1min/sx)*sx;x<=A.x1max;x+=sx){const [px]=D2P(x,A.x2min,A),z=Math.abs(x)<1e-9;
+    ctx.strokeStyle=z?(opt.zx||'rgba(138,166,198,.5)'):'rgba(138,166,198,.10)';ctx.lineWidth=z?1.4:1;
+    ctx.beginPath();ctx.moveTo(px,PAD.t);ctx.lineTo(px,PAD.t+M.H);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)';ctx.fillText(fmtTick(x),px+3,PAD.t+M.H-4);}
+  for(let y=Math.ceil(A.x2min/sy)*sy;y<=A.x2max;y+=sy){const [,py]=D2P(A.x1min,y,A),z=Math.abs(y)<1e-9;
+    ctx.strokeStyle=z?(opt.zy||'rgba(138,166,198,.5)'):'rgba(138,166,198,.10)';ctx.lineWidth=z?1.4:1;
+    ctx.beginPath();ctx.moveTo(PAD.l,py);ctx.lineTo(PAD.l+M.W,py);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)';ctx.fillText(fmtTick(y),PAD.l+3,py-3);}
+  ctx.restore();
+  ctx.fillStyle='rgba(138,166,198,.85)';ctx.font='11px ui-monospace,monospace';
+  ctx.fillText(labX,PAD.l+M.W-52,PAD.t+M.H+18); ctx.fillText(labY,6,PAD.t+10);
+}
+
+/* ================================================================
+   6. CONTOUR BUILDER  —  the clockwise Nyquist D-contour as a point list
+      Each point: {s:[re,im], type:'negjw'|'posjw'|'indent'|'arc', w:omega}
+      Order (clockwise, interior=RHP on the right): up the jω axis from −R to
+      +R with rightward indentations around jω-axis poles, then the ∞-arc.
+   ================================================================ */
+const STYLE={
+  posjw:{color:'#FFCB05',dash:[]},
+  negjw:{color:'#57C7FF',dash:[]},
+  indent:{color:'#B98CFF',dash:[2,4]},
+  arc:{color:'#8AA6C6',dash:[2,5]}
+};
+const SEGNAME={posjw:'+jω axis',negjw:'−jω axis',indent:'pole indentation',arc:'∞-arc (R→∞)'};
+function cosCluster(a,b,n){ // n+1 samples in [a,b], clustered near both ends
+  const out=[]; for(let i=0;i<=n;i++){const f=(1-Math.cos(Math.PI*i/n))/2; out.push(a+(b-a)*f);} return out;
+}
+function buildContour(axisPoleWs, corners, R){
+  const tol=1e-9;
+  // unique sorted axis-pole omegas
+  const aw=[]; axisPoleWs.slice().sort((p,q)=>p-q).forEach(w=>{ if(!aw.length||Math.abs(w-aw[aw.length-1])>1e-6) aw.push(w); });
+  // indentation radius: small, but never big enough to swallow a neighbour
+  let minGap=2*R;
+  for(let i=0;i<aw.length;i++){
+    const nbrs=[]; if(i>0)nbrs.push(aw[i]-aw[i-1]); if(i<aw.length-1)nbrs.push(aw[i+1]-aw[i]);
+    nbrs.push(R-Math.abs(aw[i])); for(const g of nbrs) if(g>0) minGap=Math.min(minGap,g);
+  }
+  const rho=Math.max(Math.min(0.04*R,0.4*minGap),1e-4);
+  // build the set of straight-axis omega breakpoints, excluding (w0-rho,w0+rho)
+  const inside=w=>aw.some(w0=>w>w0-rho-1e-9 && w<w0+rho+1e-9);
+  // candidate omegas: log-clustered near zero on both sides + corner clusters + endpoints
+  const cand=new Set(); const add=w=>{ if(w>=-R-1e-9&&w<=R+1e-9) cand.add(+w.toFixed(9)); };
+  add(-R); add(R); add(0);
+  const wlo=Math.max(rho*0.5, R*1e-4);
+  const Nb=200;
+  for(let i=0;i<=Nb;i++){ const w=wlo*Math.pow(R/wlo,i/Nb); add(w); add(-w); }
+  for(const wc of corners){ if(wc<=1e-9) continue;
+    for(let i=0;i<=18;i++){ const w=wc*Math.pow(3,(i/18-0.5)*2); add(w); add(-w); } }
+  for(const w0 of aw){ add(w0-rho); add(w0+rho); }
+  let ws=[...cand].filter(w=>!inside(w)||aw.some(w0=>Math.abs(Math.abs(w-w0)-rho)<1e-6)).sort((p,q)=>p-q);
+  // assemble
+  const pts=[];
+  for(let i=0;i<ws.length;i++){
+    const w=ws[i]; pts.push({s:[0,w], type:w<-1e-12?'negjw':'posjw', w});
+    // pole gap between this breakpoint and the next?
+    if(i<ws.length-1){
+      const w0=aw.find(p=>Math.abs(ws[i]-(p-rho))<1e-6 && Math.abs(ws[i+1]-(p+rho))<1e-6);
+      if(w0!==undefined){
+        for(let a=1;a<70;a++){ const phi=-Math.PI/2+Math.PI*a/70;
+          pts.push({s:[rho*Math.cos(phi), w0+rho*Math.sin(phi)], type:'indent', w:w0+rho*Math.sin(phi)}); }
+      }
+    }
+  }
+  // ∞-arc: theta from +pi/2 down to -pi/2 (clockwise through +Re)
+  for(let a=1;a<=160;a++){ const th=Math.PI/2 - Math.PI*a/160;
+    pts.push({s:[R*Math.cos(th), R*Math.sin(th)], type:'arc', w:R*Math.sin(th)}); }
+  return {pts,R,rho};
+}
+
+/* ================================================================
+   7. WINDING NUMBER  —  net CCW turns of (L(s) − target) around target,
+      with adaptive subdivision in s so no single step turns more than ~40°.
+   ================================================================ */
+function deltaArg(A,B,t){ // signed angle from (A−t) to (B−t) in (−pi,pi]
+  const ax=A[0]-t[0],ay=A[1]-t[1],bx=B[0]-t[0],by=B[1]-t[1];
+  const cross=ax*by-ay*bx, dot=ax*bx+ay*by; return Math.atan2(cross,dot);
+}
+function windingNumber(pts,Lpts,ast,kv,t){
+  let total=0;
+  const step=(sA,sB,LA,LB,depth)=>{
+    const d=deltaArg(LA,LB,t);
+    if(Math.abs(d)>0.7 && depth<22){
+      const sM=[(sA[0]+sB[0])/2,(sA[1]+sB[1])/2]; const LM=evalL(ast,sM,kv);
+      return step(sA,sM,LA,LM,depth+1)+step(sM,sB,LM,LB,depth+1);
+    }
+    return d;
+  };
+  const n=pts.length;
+  for(let i=0;i<n;i++){ const j=(i+1)%n;
+    total+=step(pts[i].s,pts[j].s,Lpts[i],Lpts[j],0);
+  }
+  return total/(2*Math.PI); // CCW encirclements (may be negative)
+}
+
+/* ================================================================
+   8. MODEL  —  assemble everything for the current expression + gain k
+   ================================================================ */
+let ast=null;                 // parsed L(s)
+let M=null;                   // full model {poles,zeros,P,N,Z,contour,Lpts,bode,...}
+let kv=2;                     // current gain
+const viewD={x1min:-6,x1max:6,x2min:-6,x2max:6};
+const viewN={x1min:-3,x1max:3,x2min:-3,x2max:3};
+
+function maxMag(list){let m=0;for(const p of list)m=Math.max(m,cabs(p));return m;}
+function cancelCommon(zeros,poles,scale){ // remove matched pole/zero pairs
+  const z=zeros.slice(), p=poles.slice(), tol=1e-5*Math.max(1,scale);
+  const zk=new Array(z.length).fill(false), pk=new Array(p.length).fill(false);
+  for(let i=0;i<z.length;i++)for(let j=0;j<p.length;j++){
+    if(!pk[j] && cabs(csub(z[i],p[j]))<tol){ zk[i]=true; pk[j]=true; break; }
+  }
+  return {zeros:z.filter((_,i)=>!zk[i]), poles:p.filter((_,j)=>!pk[j])};
+}
+function buildModel(){
+  if(!ast) return null;
+  let rat;
+  try{ rat=buildRational(ast,kv); }catch(e){ return {ok:false,rational:false}; }
+  const num=polyStrip(rat.n), den=polyStrip(rat.d);
+  if(den.length===0 || (den.length===1 && cabs(den[0])<1e-12)) return {ok:false,rational:false};
+  const scale0=Math.max(maxMag(polyRoots(den)),maxMag(polyRoots(num)),1);
+  let poles=cleanRoots(polyRoots(den),scale0);
+  let zeros=cleanRoots(polyRoots(num),scale0);
+  const cc=cancelCommon(zeros,poles,scale0); zeros=cc.zeros; poles=cc.poles;
+  // closed-loop char poly = den + num
+  const closed=cleanRoots(polyRoots(polyAdd(den,num)),scale0);
+
+  const axisTol=1e-6*Math.max(1,scale0);
+  const P=poles.filter(p=>p[0]>axisTol).length;
+  const axisPoleWs=poles.filter(p=>Math.abs(p[0])<=axisTol).map(p=>p[1]);
+  const corners=poles.concat(zeros).map(cabs).filter(m=>m>1e-9);
+
+  // arc radius / axis extent — must enclose all RHP poles AND closed-loop poles
+  const R=Math.max(6, 1.8*Math.max(maxMag(poles),maxMag(zeros),maxMag(closed),1));
+
+  const contour=buildContour(axisPoleWs,corners,R);
+  const Lpts=contour.pts.map(p=>evalL(ast,p.s,kv));
+
+  // winding: N = clockwise encirclements of −1 = −(CCW winding)
+  const wc=windingNumber(contour.pts,Lpts,ast,kv,[-1,0]);
+  const N=-Math.round(wc);
+  const Z=N+P;
+  // closeness to −1 (marginal warning)
+  let minDist=Infinity; for(const L of Lpts) minDist=Math.min(minDist,cabs(csub(L,[-1,0])));
+
+  // Bode data over the positive jω axis (log-spaced, its own sampling)
+  const wcMin=Math.min(...corners.filter(m=>m>1e-9),1), wcMax=Math.max(...corners,1);
+  const wlo=Math.pow(10,Math.floor(Math.log10(wcMin))-1);
+  const whi=Math.pow(10,Math.ceil(Math.log10(Math.max(wcMax,R)))+0.2);
+  const NB=460, bw=new Float64Array(NB+1), bmag=new Float64Array(NB+1), bph=new Float64Array(NB+1);
+  let prev=0, off=0;
+  for(let i=0;i<=NB;i++){ const w=wlo*Math.pow(whi/wlo,i/NB); bw[i]=w;
+    const L=evalL(ast,[0,w],kv); bmag[i]=20*Math.log10(Math.max(cabs(L),1e-12));
+    let ph=carg(L)*180/Math.PI; // unwrap
+    if(i>0){ while(ph+off-prev>180)off-=360; while(ph+off-prev<-180)off+=360; }
+    bph[i]=ph+off; prev=bph[i];
+  }
+  // gain & phase margins from the Bode curves
+  let GM=null, wGM=null, PM=null, wPM=null;
+  for(let i=1;i<=NB;i++){ // phase crossover (−180): gain margin
+    const a=bph[i-1]+180, b=bph[i]+180;
+    if(a===0){ GM=-bmag[i-1]; wGM=bw[i-1]; }
+    else if(a*b<0){ const f=a/(a-b); const mg=bmag[i-1]+f*(bmag[i]-bmag[i-1]); GM=-mg; wGM=bw[i-1]*Math.pow(bw[i]/bw[i-1],f); }
+  }
+  for(let i=1;i<=NB;i++){ // gain crossover (0 dB): phase margin
+    const a=bmag[i-1], b=bmag[i];
+    if(a===0){ PM=180+bph[i-1]; wPM=bw[i-1]; }
+    else if(a*b<0){ const f=a/(a-b); const ph=bph[i-1]+f*(bph[i]-bph[i-1]); PM=180+ph; wPM=bw[i-1]*Math.pow(bw[i]/bw[i-1],f); }
+  }
+
+  return {ok:true,rational:true,num,den,poles,zeros,closed,P,N,Z,wc,minDist,scale0,
+          axisPoleWs,R,contour,Lpts,
+          bode:{w:bw,mag:bmag,ph:bph,NB,wlo,whi},GM,wGM,PM,wPM};
+}
+function fitViewD(){
+  if(!M||!M.ok) return; const R=M.R, e=1.12*R;
+  Object.assign(viewD,{x1min:-e,x1max:e,x2min:-e,x2max:e});
+}
+function pctl(sorted,q){if(!sorted.length)return 0;const i=clamp(q*(sorted.length-1),0,sorted.length-1),lo=Math.floor(i),hi=Math.ceil(i);return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo);}
+function fitViewN(){
+  if(!M||!M.ok) return;
+  const solid=[]; for(let i=0;i<M.contour.pts.length;i++){const t=M.contour.pts[i].type; if(t==='posjw'||t==='negjw') solid.push(M.Lpts[i]);}
+  const mags=solid.map(cabs).filter(isFinite).sort((a,b)=>a-b);
+  const cap=Math.max(pctl(mags,0.92)*1.08, 1.5);
+  let xmin=-1.3,xmax=0.3,ymin=-0.3,ymax=0.3; // always include −1 and origin
+  for(const L of solid){ if(!isFinite(L[0])||!isFinite(L[1])) continue; if(cabs(L)>cap) continue;
+    xmin=Math.min(xmin,L[0]);xmax=Math.max(xmax,L[0]);ymin=Math.min(ymin,L[1]);ymax=Math.max(ymax,L[1]); }
+  const padx=(xmax-xmin)*0.14+0.2, pady=(ymax-ymin)*0.14+0.2;
+  Object.assign(viewN,{x1min:xmin-padx,x1max:xmax+padx,x2min:ymin-pady,x2max:ymax+pady});
+}
+
+/* ================================================================
+   9. RENDERING
+   ================================================================ */
+let ci=0;                     // cursor index into contour.pts
+function curPt(){ return M&&M.ok? M.contour.pts[clamp(ci,0,M.contour.pts.length-1)] : null; }
+function curL(){ return M&&M.ok? M.Lpts[clamp(ci,0,M.Lpts.length-1)] : null; }
+
+function drawRuns(ctx,A,XY,types){ // draw the contour/image as color-coded runs
+  ctx.save(); ctx.beginPath(); ctx.rect(PAD.l,PAD.t,A.M.W,A.M.H); ctx.clip();
+  ctx.lineWidth=2; ctx.lineJoin='round'; ctx.lineCap='round';
+  const n=XY.length; let i=0;
+  while(i<n){
+    const t=types[i], st=STYLE[t];
+    ctx.setLineDash(st.dash); ctx.strokeStyle=st.color; ctx.beginPath();
+    const start=i>0?i-1:i; let p=D2P(XY[start][0],XY[start][1],A); ctx.moveTo(p[0],p[1]);
+    let j=i; while(j<n && types[j]===t){ p=D2P(XY[j][0],XY[j][1],A); ctx.lineTo(p[0],p[1]); j++; }
+    ctx.stroke(); i=j;
+  }
+  ctx.setLineDash([]); ctx.restore();
+}
+function arrowAt(ctx,A,XY,i,color){ // direction arrowhead at index i
+  const n=XY.length, a=XY[i], b=XY[(i+3)%n];
+  const pa=D2P(a[0],a[1],A), pb=D2P(b[0],b[1],A);
+  const ang=Math.atan2(pb[1]-pa[1],pb[0]-pa[0]); if(!isFinite(ang))return;
+  ctx.save();ctx.translate(pa[0],pa[1]);ctx.rotate(ang);ctx.fillStyle=color;
+  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(-8,-4);ctx.lineTo(-8,4);ctx.closePath();ctx.fill();ctx.restore();
+}
+function drawMarker(ctx,px,py,color){
+  ctx.save();ctx.shadowColor='#fff';ctx.shadowBlur=10;ctx.fillStyle=color;
+  ctx.beginPath();ctx.arc(px,py,6,0,7);ctx.fill();ctx.shadowBlur=0;
+  ctx.lineWidth=2;ctx.strokeStyle='#fff';ctx.beginPath();ctx.arc(px,py,6,0,7);ctx.stroke();ctx.restore();
+}
+
+function drawDPlane(){
+  const cv=el('dplane'); const {ctx}=fitDPR(cv); const A=actual(cv,viewD); const Mx=A.M;
+  ctx.clearRect(0,0,Mx.w,Mx.h);
+  if(!M||!M.ok){ drawGrid(ctx,A,'Re s','Im s',{}); return; }
+  // shade the enclosed right-half plane faintly
+  ctx.save();ctx.beginPath();ctx.rect(PAD.l,PAD.t,Mx.W,Mx.H);ctx.clip();
+  const [zx]=D2P(0,0,A); ctx.fillStyle='rgba(255,203,5,.05)';ctx.fillRect(zx,PAD.t,PAD.l+Mx.W-zx,Mx.H);ctx.restore();
+  drawGrid(ctx,A,'Re s','Im s',{zx:'rgba(255,203,5,.5)'});
+  const XY=M.contour.pts.map(p=>p.s), types=M.contour.pts.map(p=>p.type);
+  drawRuns(ctx,A,XY,types);
+  // direction arrows (clockwise): one on −jω, +jω, arc
+  ctx.save();ctx.beginPath();ctx.rect(PAD.l,PAD.t,Mx.W,Mx.H);ctx.clip();
+  let iNeg=-1,iPos=-1,iArc=-1;
+  for(let i=0;i<types.length;i++){ if(types[i]==='negjw')iNeg=i; if(iPos<0&&types[i]==='posjw')iPos=i; if(iArc<0&&types[i]==='arc')iArc=i; }
+  if(iPos>=0)arrowAt(ctx,A,XY,Math.min(iPos+Math.floor((types.lastIndexOf('posjw')-iPos)/2),XY.length-4),STYLE.posjw.color);
+  if(iNeg>=0)arrowAt(ctx,A,XY,Math.floor(iNeg/2),STYLE.negjw.color);
+  if(iArc>=0)arrowAt(ctx,A,XY,Math.min(iArc+80,XY.length-4),STYLE.arc.color);
+  ctx.restore();
+  // poles (×) and zeros (○)
+  ctx.save();ctx.beginPath();ctx.rect(PAD.l,PAD.t,Mx.W,Mx.H);ctx.clip();
+  for(const z of M.zeros){ const [px,py]=D2P(z[0],z[1],A);
+    ctx.strokeStyle='#5BD6A0';ctx.lineWidth=2;ctx.beginPath();ctx.arc(px,py,5.5,0,7);ctx.stroke(); }
+  for(const p of M.poles){ const [px,py]=D2P(p[0],p[1],A),r=6;
+    ctx.strokeStyle='#FF6B6B';ctx.lineWidth=2.2;
+    ctx.beginPath();ctx.moveTo(px-r,py-r);ctx.lineTo(px+r,py+r);ctx.moveTo(px+r,py-r);ctx.lineTo(px-r,py+r);ctx.stroke(); }
+  ctx.restore();
+  // R→∞ label near the arc
+  ctx.fillStyle='rgba(138,166,198,.8)';ctx.font='11px ui-monospace,monospace';
+  const lab=D2P(M.R*0.72,M.R*0.72,A); ctx.fillText('R → ∞',lab[0],lab[1]);
+  // cursor
+  const cp=curPt(); if(cp){ const [px,py]=D2P(cp.s[0],cp.s[1],A); drawMarker(ctx,px,py,STYLE[cp.type].color); }
+}
+
+function drawNyquist(){
+  const cv=el('nyq'); const {ctx}=fitDPR(cv); const A=actual(cv,viewN); const Mx=A.M;
+  ctx.clearRect(0,0,Mx.w,Mx.h);
+  if(!M||!M.ok){ drawGrid(ctx,A,'Re L','Im L',{}); return; }
+  drawGrid(ctx,A,'Re L','Im L',{});
+  // faint unit circle (|L|=1 → phase-margin reference)
+  ctx.save();ctx.beginPath();ctx.rect(PAD.l,PAD.t,Mx.W,Mx.H);ctx.clip();
+  const c0=D2P(0,0,A), cR=D2P(1,0,A); const rpx=Math.abs(cR[0]-c0[0]);
+  ctx.strokeStyle='rgba(138,166,198,.22)';ctx.setLineDash([3,4]);ctx.lineWidth=1;
+  ctx.beginPath();ctx.arc(c0[0],c0[1],rpx,0,7);ctx.stroke();ctx.setLineDash([]);ctx.restore();
+  const XY=M.Lpts, types=M.contour.pts.map(p=>p.type);
+  drawRuns(ctx,A,XY,types);
+  // direction arrows on posjw + arc
+  ctx.save();ctx.beginPath();ctx.rect(PAD.l,PAD.t,Mx.W,Mx.H);ctx.clip();
+  let iPos=types.indexOf('posjw'), iArc=types.indexOf('arc');
+  if(iPos>=0)arrowAt(ctx,A,XY,Math.min(iPos+Math.floor((types.lastIndexOf('posjw')-iPos)/2),XY.length-4),STYLE.posjw.color);
+  ctx.restore();
+  // the −1 point
+  const [mx,my]=D2P(-1,0,A);
+  ctx.strokeStyle='#FF6B6B';ctx.lineWidth=2.4;const r=6;
+  ctx.beginPath();ctx.moveTo(mx-r,my-r);ctx.lineTo(mx+r,my+r);ctx.moveTo(mx+r,my-r);ctx.lineTo(mx-r,my+r);ctx.stroke();
+  ctx.fillStyle='#FF6B6B';ctx.font='bold 12px ui-monospace,monospace';ctx.fillText('−1',mx+9,my-7);
+  // cursor
+  const cp=curPt(); const L=curL();
+  if(cp&&L&&isFinite(L[0])&&isFinite(L[1])){ const [px,py]=D2P(L[0],L[1],A); drawMarker(ctx,px,py,STYLE[cp.type].color); }
+}
+
+function drawBode(){
+  const cv=el('bode'); const {ctx,w,h}=fitDPR(cv);
+  ctx.clearRect(0,0,w,h);
+  if(!M||!M.ok){ return; }
+  const B=M.bode; const pL=52,pR=14,pT=12,pB=26, gap=26;
+  const paneH=(h-pT-pB-gap)/2, W=w-pL-pR;
+  const x1=pT, x2=pT+paneH; // mag pane top; phase pane top = x2+gap
+  const yPh=x2+gap;
+  const lw=Math.log10(B.wlo), hw=Math.log10(B.whi);
+  const X=w=>pL+(Math.log10(w)-lw)/(hw-lw)*W;
+  // ---- magnitude pane ----
+  let mlo=Infinity,mhi=-Infinity; for(let i=0;i<=B.NB;i++){const v=B.mag[i];if(isFinite(v)){mlo=Math.min(mlo,v);mhi=Math.max(mhi,v);}}
+  if(!isFinite(mlo)){mlo=-40;mhi=20;} mlo=Math.min(mlo,-3);mhi=Math.max(mhi,3); const mpad=(mhi-mlo)*0.08; mlo-=mpad;mhi+=mpad;
+  const Ym=v=>x1+(1-(v-mlo)/(mhi-mlo))*paneH;
+  // ---- phase pane ----
+  let plo=Infinity,phi=-Infinity; for(let i=0;i<=B.NB;i++){const v=B.ph[i];if(isFinite(v)){plo=Math.min(plo,v);phi=Math.max(phi,v);}}
+  if(!isFinite(plo)){plo=-270;phi=0;} plo=Math.min(plo,-185);phi=Math.max(phi,-175); const ppad=(phi-plo)*0.08; plo-=ppad;phi+=ppad;
+  const Yp=v=>yPh+(1-(v-plo)/(phi-plo))*paneH;
+  ctx.font='10px ui-monospace,monospace';
+  // decade gridlines + labels
+  for(let d=Math.ceil(lw);d<=Math.floor(hw);d++){ const xx=X(Math.pow(10,d));
+    ctx.strokeStyle='rgba(138,166,198,.14)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(xx,x1);ctx.lineTo(xx,x1+paneH);ctx.moveTo(xx,yPh);ctx.lineTo(xx,yPh+paneH);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)';ctx.fillText('10'+supers(d),xx-8,yPh+paneH+15);
+  }
+  // 0 dB and −180° reference lines
+  if(0>mlo&&0<mhi){const yy=Ym(0);ctx.strokeStyle='rgba(87,199,255,.4)';ctx.setLineDash([4,4]);ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pL,yy);ctx.lineTo(pL+W,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(87,199,255,.7)';ctx.fillText('0 dB',pL+2,yy-3);}
+  if(-180>plo&&-180<phi){const yy=Yp(-180);ctx.strokeStyle='rgba(255,107,107,.45)';ctx.setLineDash([4,4]);ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pL,yy);ctx.lineTo(pL+W,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(255,107,107,.75)';ctx.fillText('−180°',pL+2,yy-3);}
+  // y ticks
+  const smy=niceStep(mhi-mlo,4); for(let v=Math.ceil(mlo/smy)*smy;v<=mhi;v+=smy){const yy=Ym(v);ctx.fillStyle='rgba(138,166,198,.55)';ctx.fillText(fmtTick(v),4,yy+3);}
+  const spy=niceStep(phi-plo,4); for(let v=Math.ceil(plo/spy)*spy;v<=phi;v+=spy){const yy=Yp(v);ctx.fillStyle='rgba(138,166,198,.55)';ctx.fillText(fmtTick(v),4,yy+3);}
+  // pane frames + labels
+  ctx.strokeStyle='rgba(138,166,198,.28)';ctx.lineWidth=1;ctx.strokeRect(pL,x1,W,paneH);ctx.strokeRect(pL,yPh,W,paneH);
+  ctx.fillStyle='rgba(234,241,251,.8)';ctx.font='10px ui-monospace,monospace';
+  ctx.fillText('|L|  (dB)',pL+4,x1+12); ctx.fillText('∠L  (deg)',pL+4,yPh+12); ctx.fillText('ω (rad/s)',pL+W-58,yPh+paneH+15);
+  // curves (maize = the +jω color)
+  ctx.strokeStyle=STYLE.posjw.color;ctx.lineWidth=1.8;ctx.lineJoin='round';
+  ctx.save();ctx.beginPath();ctx.rect(pL,x1,W,paneH);ctx.clip();ctx.beginPath();
+  for(let i=0;i<=B.NB;i++){const xx=X(B.w[i]),yy=Ym(B.mag[i]);i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy);}ctx.stroke();ctx.restore();
+  ctx.save();ctx.beginPath();ctx.rect(pL,yPh,W,paneH);ctx.clip();ctx.beginPath();
+  for(let i=0;i<=B.NB;i++){const xx=X(B.w[i]),yy=Yp(B.ph[i]);i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy);}ctx.stroke();ctx.restore();
+  // cursor (only on +jω axis)
+  const cp=curPt();
+  if(cp&&cp.type==='posjw'&&cp.w>0){ const wcur=cp.w; if(wcur>=B.wlo&&wcur<=B.whi){
+    const xx=X(wcur); const L=evalL(ast,[0,wcur],kv); const mdb=20*Math.log10(Math.max(cabs(L),1e-12));
+    ctx.strokeStyle='rgba(234,241,251,.7)';ctx.setLineDash([4,4]);ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(xx,x1);ctx.lineTo(xx,x1+paneH);ctx.moveTo(xx,yPh);ctx.lineTo(xx,yPh+paneH);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=STYLE.posjw.color;
+    ctx.beginPath();ctx.arc(xx,Ym(mdb),4,0,7);ctx.fill();
+    // phase dot: read from the unwrapped array so it matches the drawn curve
+    ctx.beginPath();ctx.arc(xx,Yp(nearestPh(wcur)),4,0,7);ctx.fill();
+  }}
+}
+function nearestPh(w){ const B=M.bode; let best=0,bd=Infinity; for(let i=0;i<=B.NB;i++){const d=Math.abs(Math.log10(B.w[i])-Math.log10(w));if(d<bd){bd=d;best=B.ph[i];}} return best; }
+function supers(d){ const map={'-':'⁻','0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹'}; return String(d).split('').map(c=>map[c]||c).join(''); }
+
+/* ================================================================
+   10. READOUTS + STABILITY
+   ================================================================ */
+function rootsList(rs){ if(!rs.length) return 'none'; return rs.slice().sort((a,b)=>b[0]-a[0]||b[1]-a[1]).map(r=>fmtC(r[0],r[1])).join('   ·   '); }
+function updateReadouts(){
+  const cp=curPt(), L=curL();
+  if(!cp){ ['roSeg','roS','roL','roLmag','roOL'].forEach(id=>el(id).textContent='—'); return; }
+  el('segSw').style.background=STYLE[cp.type].color; el('segName').textContent=SEGNAME[cp.type];
+  el('roS').textContent=fmtC(cp.s[0],cp.s[1]);
+  if(isFinite(L[0])&&isFinite(L[1])){
+    el('roL').textContent=fmtC(L[0],L[1]);
+    el('roLmag').textContent=`${fmt3(cabs(L))}  ·  ${fmt3(carg(L)*180/Math.PI)}°`;
+    const ol=cadd(L,[1,0]); el('roOL').textContent=fmtC(ol[0],ol[1]);
+  } else { el('roL').textContent='∞'; el('roLmag').textContent='∞'; el('roOL').textContent='∞'; }
+}
+function updateStability(){
+  if(!M||!M.ok){ ['stP','stN','stZ','stGM','stPM'].forEach(id=>el(id).textContent='—'); el('stVtext').textContent='—'; el('stVerdict').className='cell verdict'; return; }
+  el('stP').textContent=M.P; el('stN').textContent=(M.N>0?'+':'')+M.N; el('stZ').textContent=M.Z;
+  const v=el('stVerdict'), vt=el('stVtext');
+  if(M.Z<=0){ v.className='cell verdict good'; vt.textContent='STABLE'; }
+  else { v.className='cell verdict bad'; vt.textContent='UNSTABLE ('+M.Z+' RHP)'; }
+  el('stGM').textContent = M.GM==null?'∞':(M.GM.toFixed(1)+' dB');
+  el('stPM').textContent = M.PM==null?'—':(M.PM.toFixed(1)+'°');
+  let note='';
+  if(M.minDist<0.03) note='⚠ the curve passes through −1 — marginally stable (a closed-loop pole on the jω axis).';
+  else if(M.GM!=null&&M.GM<0) note='Negative gain margin: −1 is already encircled.';
+  el('stNote').textContent=note; el('stNote').className='status'+(note?' warn':'');
+}
+function updateReadoutsPolesZeros(){
+  el('roPoles').textContent = M&&M.ok? rootsList(M.poles):'—';
+  el('roZeros').textContent = M&&M.ok? rootsList(M.zeros):'—';
+}
+
+/* ================================================================
+   11. ORCHESTRATION
+   ================================================================ */
+function drawAll(){ drawDPlane(); drawNyquist(); drawBode(); }
+function redrawCursor(){ drawDPlane(); drawNyquist(); drawBode(); updateReadouts(); }
+function setCursorIndex(i){ const n=M&&M.ok?M.contour.pts.length:1; ci=((Math.round(i)%n)+n)%n; frac=ci/n; redrawCursor(); }
+
+function rebuild(refit){
+  try{ ast=parse(el('expr').value.trim()); el('expr').classList.remove('bad'); }
+  catch(e){ el('expr').classList.add('bad'); el('dStatus').textContent='⚠ '+e.message; el('dStatus').className='status warn'; return; }
+  const m=buildModel();
+  if(!m||!m.ok){ el('expr').classList.add('bad'); el('dStatus').textContent='⚠ '+(m&&m.rational===false?'L(s) must be a rational function of s (and k).':'could not build L(s).'); el('dStatus').className='status warn'; M=null; drawAll(); updateStability(); updateReadoutsPolesZeros(); return; }
+  M=m; el('dStatus').textContent=''; el('dStatus').className='status'; el('nStatus').textContent='';
+  ci=clamp(ci,0,M.contour.pts.length-1);
+  if(refit){ fitViewD(); fitViewN(); }
+  drawAll(); updateReadouts(); updateStability(); updateReadoutsPolesZeros();
+}
+function onK(){ rebuild(false); }  // keep views fixed while sweeping k (watch −1 gain/lose encirclements)
+
+/* ================================================================
+   12. INTERACTION
+   ================================================================ */
+// --- expression ---
+el('expr').addEventListener('change',()=>rebuild(true));
+el('expr').addEventListener('keydown',e=>{if(e.key==='Enter')rebuild(true);});
+
+// --- k slider / boxes ---
+function configKSlider(){
+  const lo=parseFloat(el('kMin').value), hi=parseFloat(el('kMax').value);
+  if(isFinite(lo)&&isFinite(hi)&&hi>lo){ const sl=el('kSlider'); sl.min=lo; sl.max=hi; sl.step=(hi-lo)/500; kv=clamp(kv,lo,hi); sl.value=kv; paintK(); }
+}
+function paintK(){ const sl=el('kSlider'); const lo=parseFloat(sl.min),hi=parseFloat(sl.max);
+  el('kVal').textContent=kv.toFixed(2); el('kBox').value=+kv.toFixed(4);
+  sl.style.setProperty('--fill',((kv-lo)/(hi-lo)*100)+'%'); }
+el('kSlider').addEventListener('input',()=>{ kv=parseFloat(el('kSlider').value); paintK(); onK(); });
+el('kBox').addEventListener('change',()=>{ const v=parseFloat(el('kBox').value); if(isFinite(v)){ kv=v; configKSlider(); onK(); } });
+['kMin','kMax'].forEach(id=>el(id).addEventListener('change',()=>{ configKSlider(); onK(); }));
+
+// --- drag cursor on the D-contour plane ---
+(function(){ const cv=el('dplane'); let down=null;
+  const nearestOnContour=(x,y,A)=>{ let bi=0,bd=Infinity; for(let i=0;i<M.contour.pts.length;i++){ const p=D2P(M.contour.pts[i].s[0],M.contour.pts[i].s[1],A); const d=Math.hypot(x-p[0],y-p[1]); if(d<bd){bd=d;bi=i;} } return {bi,bd}; };
+  cv.addEventListener('mousedown',e=>{ if(!M||!M.ok)return; const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,A=actual(cv,viewD);
+    const {bi,bd}=nearestOnContour(x,y,A); down={x,y,lx:x,ly:y,moved:false,mode:bd<16?'cursor':'pan'}; if(down.mode==='cursor'){dragging=true;setCursorIndex(bi);} });
+  window.addEventListener('mousemove',e=>{ if(!down)return; const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,A=actual(cv,viewD);
+    if(Math.hypot(x-down.x,y-down.y)>4)down.moved=true;
+    if(down.mode==='cursor'){ const {bi}=nearestOnContour(x,y,A); setCursorIndex(bi); }
+    else if(down.moved){ const dx=x-down.lx,dy=y-down.ly,rx=viewD.x1max-viewD.x1min,ry=viewD.x2max-viewD.x2min;
+      viewD.x1min-=dx/A.M.W*rx;viewD.x1max-=dx/A.M.W*rx;viewD.x2min+=dy/A.M.H*ry;viewD.x2max+=dy/A.M.H*ry; down.lx=x;down.ly=y;drawDPlane(); } });
+  window.addEventListener('mouseup',()=>{ if(down&&down.mode==='cursor')dragging=false; down=null; });
+  cv.addEventListener('wheel',e=>{ e.preventDefault(); const r=cv.getBoundingClientRect(),A=actual(cv,viewD),[dx,dy]=P2D(e.clientX-r.left,e.clientY-r.top,A),f=e.deltaY>0?1.1:1/1.1;
+    viewD.x1min=dx-(dx-viewD.x1min)*f;viewD.x1max=dx+(viewD.x1max-dx)*f;viewD.x2min=dy-(dy-viewD.x2min)*f;viewD.x2max=dy+(viewD.x2max-dy)*f; drawDPlane(); },{passive:false});
+})();
+
+// --- drag cursor on the Nyquist plane ---
+(function(){ const cv=el('nyq'); let down=null;
+  const nearestOnImage=(x,y,A)=>{ let bi=0,bd=Infinity; for(let i=0;i<M.Lpts.length;i++){ const L=M.Lpts[i]; if(!isFinite(L[0])||!isFinite(L[1]))continue; const p=D2P(L[0],L[1],A); const d=Math.hypot(x-p[0],y-p[1]); if(d<bd){bd=d;bi=i;} } return {bi,bd}; };
+  cv.addEventListener('mousedown',e=>{ if(!M||!M.ok)return; const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,A=actual(cv,viewN);
+    const {bi,bd}=nearestOnImage(x,y,A); down={x,y,lx:x,ly:y,moved:false,mode:bd<22?'cursor':'pan'}; if(down.mode==='cursor'){dragging=true;setCursorIndex(bi);} });
+  window.addEventListener('mousemove',e=>{ if(!down)return; const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,A=actual(cv,viewN);
+    if(Math.hypot(x-down.x,y-down.y)>4)down.moved=true;
+    if(down.mode==='cursor'){ const {bi}=nearestOnImage(x,y,A); setCursorIndex(bi); }
+    else if(down.moved){ const dx=x-down.lx,dy=y-down.ly,rx=viewN.x1max-viewN.x1min,ry=viewN.x2max-viewN.x2min;
+      viewN.x1min-=dx/A.M.W*rx;viewN.x1max-=dx/A.M.W*rx;viewN.x2min+=dy/A.M.H*ry;viewN.x2max+=dy/A.M.H*ry; down.lx=x;down.ly=y;drawNyquist(); } });
+  window.addEventListener('mouseup',()=>{ if(down&&down.mode==='cursor')dragging=false; down=null; });
+  cv.addEventListener('wheel',e=>{ e.preventDefault(); const r=cv.getBoundingClientRect(),A=actual(cv,viewN),[dx,dy]=P2D(e.clientX-r.left,e.clientY-r.top,A),f=e.deltaY>0?1.1:1/1.1;
+    viewN.x1min=dx-(dx-viewN.x1min)*f;viewN.x1max=dx+(viewN.x1max-dx)*f;viewN.x2min=dy-(dy-viewN.x2min)*f;viewN.x2max=dy+(viewN.x2max-dy)*f; drawNyquist(); },{passive:false});
+})();
+
+// --- drag cursor on the Bode plot (maps to nearest +jω point) ---
+(function(){ const cv=el('bode'); let down=false;
+  const setFromX=px=>{ if(!M||!M.ok)return; const pL=52,pR=14,W=cv.clientWidth-pL-pR;
+    const B=M.bode, lw=Math.log10(B.wlo),hw=Math.log10(B.whi);
+    const w=Math.pow(10, clamp((px-pL)/W,0,1)*(hw-lw)+lw);
+    // nearest posjw contour index by omega
+    let bi=0,bd=Infinity; for(let i=0;i<M.contour.pts.length;i++){ const p=M.contour.pts[i]; if(p.type!=='posjw'||p.w<=0)continue; const d=Math.abs(Math.log10(p.w)-Math.log10(w)); if(d<bd){bd=d;bi=i;} }
+    setCursorIndex(bi); };
+  cv.addEventListener('mousedown',e=>{ dragging=true; down=true; const r=cv.getBoundingClientRect(); setFromX(e.clientX-r.left); });
+  window.addEventListener('mousemove',e=>{ if(!down)return; const r=cv.getBoundingClientRect(); setFromX(e.clientX-r.left); });
+  window.addEventListener('mouseup',()=>{ if(down)dragging=false; down=false; });
+})();
+
+// --- fit buttons ---
+el('fitD').onclick=()=>{ fitViewD(); drawDPlane(); };
+el('fitN').onclick=()=>{ fitViewN(); drawNyquist(); };
+
+// --- trace animation ---
+let traceOn=false, dragging=false, frac=0, speedMul=1, lastT=0;
+el('trace').onclick=()=>{ traceOn=!traceOn; el('trace').classList.toggle('on',traceOn); el('trace').textContent=traceOn?'❚❚ Tracing':'▶ Trace'; if(traceOn)lastT=performance.now(); };
+el('restart').onclick=()=>{ frac=0; setCursorIndex(0); };
+function paintSpeed(){ const v=parseFloat(el('spd').value); speedMul=Math.pow(2,v); el('spdVal').textContent=(speedMul>=16?speedMul.toFixed(0):speedMul.toFixed(1))+'×';
+  el('spd').style.setProperty('--fill',((v- -1)/(4- -1)*100)+'%'); }
+el('spd').addEventListener('input',paintSpeed);
+function frame(now){
+  if(traceOn && !dragging && M && M.ok){
+    let dt=(now-lastT)/1000; if(!(dt>0))dt=0; dt=Math.min(dt,0.05); lastT=now;
+    frac=(frac + dt*0.12*speedMul)%1;
+    const n=M.contour.pts.length; ci=clamp(Math.floor(frac*n),0,n-1);
+    redrawCursor();
+  } else { lastT=now; }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ================================================================
+   13. BOOT
+   ================================================================ */
+let rz=null; window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(drawAll,90);});
+configKSlider(); paintK(); paintSpeed();
+rebuild(true);
+setCursorIndex(Math.floor(M?M.contour.pts.length*0.62:0));
+</script>
+</body>
+</html>
