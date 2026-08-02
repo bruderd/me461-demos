@@ -191,6 +191,20 @@ run, indefinite-V̇ saddle signs, unstable-node V-growth, blow-up guard bounds t
 persists (2 traces), `V=x1` → verdict "not positive-definite" (box red). Screenshot confirms the translucent green
 bowl with the vector field showing through, the lifted trajectory, and the V(t) plot + tangent.
 
+**Layout/polish refinements (this session, after the initial build).**
+- Top restructured for minimal vertical space: a `.sysgrid` (`1fr 300px`) with the three definitions stacked as
+  `.eqrow`s (`ẋ₁ =`, `ẋ₂ =`, `V(x) =` — label + inline input) on the LEFT and the **Lyapunov-check box on the
+  RIGHT**, so the function definitions and the plots are visible together. Controls collapsed to one wrapping row.
+- **V-axis (z) is now user-settable**: `V min (z)`/`V max (z)` fields drive `zRange`; `heightOf` maps V linearly
+  onto `[zRange.min,zRange.max]→[0,ZSPAN=1.75]` (clamped [-0.12,1.1]). Auto range = [min(0, 2nd-pctile V),
+  96th-pctile V] (set in `onModelChange` when `zRange.auto`, shown via `syncZFields`); typing both fields switches
+  to manual, clearing/!valid reverts to auto. This REPLACED the old `mesh.scale/capR/HZ` height model. `drawAxes`
+  now draws a labelled vertical V-axis with ticks at the back-most base corner (`heightOf`-positioned).
+- **V̇/ẋ typesetting**: the combining overdot (U+0307) drifts in the sans body/notes but renders fine in mono, so
+  all sans-context `V̇`/`ẋ` are wrapped in `<span class="mono">` (footer, header sub, card notes). The mono
+  readouts/legend/verdict were already fine.
+- View-toggle labels shortened to `x-z` / `y-z`; the `Reset view` button is full-size (dropped `.mini`).
+
 ### Status: Nyquist Stability Explorer is DONE + verified — NOT committed (was NEWEST; see above).
 - Files: `demos/nyquist/index.html` (self-contained single file) and its landing-page card in `index.html`
   (added, right after the Two-Compartment Drug Delivery card). Roadmap checkbox above ticked. Live target once

@@ -39,12 +39,16 @@
   .hint{font-size:12px;color:var(--muted);line-height:1.55;margin-top:8px}
   code{font-family:var(--mono);background:#0a1d38;padding:1px 5px;border-radius:4px;font-size:12px}
 
-  /* ---- system definition ---- */
-  .eqs{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end}
-  @media(max-width:820px){.eqs{grid-template-columns:1fr}}
-  .eq{display:flex;flex-direction:column;gap:4px}
-  .eq .lab{font-family:var(--mono);font-size:12px;color:var(--muted)}
-  .eq .lab b{color:var(--ink)}
+  /* ---- system definition: stacked ẋ₁,ẋ₂,V(x) on the left, Lyapunov check on the right ---- */
+  .mono{font-family:var(--mono)}
+  .sysgrid{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
+  @media(max-width:820px){.sysgrid{grid-template-columns:1fr}}
+  .defs{display:flex;flex-direction:column;gap:8px;min-width:0}
+  .eqrow{display:flex;align-items:center;gap:10px}
+  .eqrow .eqlab{font-family:var(--mono);font-size:14px;color:var(--ink);white-space:nowrap;min-width:50px;text-align:right}
+  .eqrow input{flex:1 1 auto}
+  .defbtns{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:2px}
+  .hint2{font-size:11px;color:var(--muted);line-height:1.4}
 
   /* ---- parameter sliders ---- */
   .params{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px 16px;margin-top:12px}
@@ -128,25 +132,33 @@
   <header>
     <span class="tag">MECHENG&nbsp;461</span>
     <h1>Lyapunov Function Explorer</h1>
-    <span class="sub">watch V(x) fall along the flow of ẋ = f(x)</span>
+    <span class="sub">watch V(x) fall along the flow of <span class="mono">ẋ = f(x)</span></span>
   </header>
 
-  <!-- ============ SYSTEM ============ -->
+  <!-- ============ SYSTEM + LYAPUNOV CHECK ============ -->
   <div class="card">
-    <h2>system <span class="m lc">ẋ = f(x)</span> &nbsp;and&nbsp; candidate <span class="m lc">V(x)</span>
-        <span class="note">V̇(x) = ∇V·f is computed for you</span></h2>
-    <div class="eqs">
-      <div class="eq"><span class="lab"><b>ẋ<sub>1</sub></b> = (fn of x1, x2)</span><input id="f1" type="text" spellcheck="false" value="-x1 + x2"></div>
-      <div class="eq"><span class="lab"><b>ẋ<sub>2</sub></b> = (fn of x1, x2)</span><input id="f2" type="text" spellcheck="false" value="-x1 - x2"></div>
-      <div class="eq"><span class="lab"><b>V</b>(x) = (fn of x1, x2)</span><input id="V" type="text" spellcheck="false" value="x1^2 + x2^2"></div>
-      <button id="render" class="primary">Build</button>
-    </div>
-    <div id="err"></div>
-    <div id="params" class="params"></div>
-    <div class="hint">
-      States are <code>x1</code>,<code>x2</code>. Available: <code>sin cos tan exp log sqrt abs sign …</code>,
-      <code>pi</code>, <code>^</code> for powers. Any other letter (e.g. <code>a</code>, <code>b</code>) becomes a
-      tunable <b>parameter</b> with a slider. The equilibrium is taken at the origin.
+    <h2>system &amp; Lyapunov candidate
+        <span class="note"><span class="mono">V̇</span> = ∇V·f is computed for you</span></h2>
+    <div class="sysgrid">
+      <div class="defs">
+        <div class="eqrow"><span class="eqlab">ẋ<sub>1</sub> =</span><input id="f1" type="text" spellcheck="false" value="-x1 + x2"></div>
+        <div class="eqrow"><span class="eqlab">ẋ<sub>2</sub> =</span><input id="f2" type="text" spellcheck="false" value="-x1 - x2"></div>
+        <div class="eqrow"><span class="eqlab">V(x) =</span><input id="V" type="text" spellcheck="false" value="x1^2 + x2^2"></div>
+        <div class="defbtns">
+          <button id="render" class="primary">Build</button>
+          <span class="hint2">states <code>x1</code>,<code>x2</code>; other letters → parameter sliders; <code>^</code> = power</span>
+        </div>
+        <div id="err"></div>
+        <div id="params" class="params"></div>
+      </div>
+      <div class="verdict" id="verdict">
+        <span class="vh">Lyapunov check · equilibrium at origin</span>
+        <span class="cond" id="cEq"><span class="dot"></span>origin is an equilibrium, f(0)=0</span>
+        <span class="cond" id="cV0"><span class="dot"></span>V(0) = 0</span>
+        <span class="cond" id="cVpos"><span class="dot"></span>V &gt; 0 near origin</span>
+        <span class="cond" id="cVdot"><span class="dot"></span>V̇ &lt; 0 near origin</span>
+        <span class="headline" id="vHead">—</span>
+      </div>
     </div>
   </div>
 
@@ -158,22 +170,17 @@
         <div class="field"><span class="k">x₁ max</span><input id="x1max" class="nospin" type="number" step="any" value="4"></div>
         <div class="field"><span class="k">x₂ min</span><input id="x2min" class="nospin" type="number" step="any" value="-4"></div>
         <div class="field"><span class="k">x₂ max</span><input id="x2max" class="nospin" type="number" step="any" value="4"></div>
+        <div class="field"><span class="k">V min (z)</span><input id="zmin" class="nospin" type="number" step="any"></div>
+        <div class="field"><span class="k">V max (z)</span><input id="zmax" class="nospin" type="number" step="any"></div>
         <div class="field"><span class="k">Duration</span><input id="dur" class="nospin" type="number" step="any" min="0.5" value="12"></div>
         <div class="field ic"><span class="k">x₁(0)</span><input id="ic1" class="nospin" type="number" step="any" value="3"></div>
         <div class="field ic"><span class="k">x₂(0)</span><input id="ic2" class="nospin" type="number" step="any" value="0.5"></div>
       </div>
-      <div class="btns">
-        <button id="run" class="primary">Run ▶</button>
-        <button id="clear">Clear traces</button>
-        <button id="resetView" class="mini">Reset view</button>
-      </div>
-    </div>
-    <div class="ctrls" style="margin-top:12px">
       <div class="seg" id="viewSeg">
         <button data-view="iso" class="on">Iso</button>
         <button data-view="top">Overhead (x-y)</button>
-        <button data-view="xz">x–V (x-z)</button>
-        <button data-view="yz">y–V (y-z)</button>
+        <button data-view="xz">x-z</button>
+        <button data-view="yz">y-z</button>
       </div>
       <div class="readouts">
         <div class="ro"><div class="k">x</div><div class="v" id="roX">—</div></div>
@@ -181,13 +188,10 @@
         <div class="ro"><div class="k">V̇(x)</div><div class="v" id="roVd">—</div></div>
         <div class="ro"><div class="k">t</div><div class="v" id="roT">0.00</div></div>
       </div>
-      <div class="verdict" id="verdict">
-        <span class="vh">Lyapunov check · equilibrium at origin</span>
-        <span class="cond" id="cEq"><span class="dot"></span>origin is an equilibrium, f(0)=0</span>
-        <span class="cond" id="cV0"><span class="dot"></span>V(0) = 0</span>
-        <span class="cond" id="cVpos"><span class="dot"></span>V &gt; 0 near origin</span>
-        <span class="cond" id="cVdot"><span class="dot"></span>V̇ &lt; 0 near origin</span>
-        <span class="headline" id="vHead">—</span>
+      <div class="btns">
+        <button id="run" class="primary">Run ▶</button>
+        <button id="clear">Clear traces</button>
+        <button id="resetView">Reset view</button>
       </div>
     </div>
   </div>
@@ -205,7 +209,7 @@
       <div class="status" id="sstatus"></div>
     </div>
     <div class="card">
-      <h2>V(x(t)) along the trajectory <span class="note">drag to scrub · tangent slope = V̇</span></h2>
+      <h2>V(x(t)) along the trajectory <span class="note">drag to scrub · tangent slope = <span class="mono">V̇</span></span></h2>
       <canvas id="vt"></canvas>
       <div class="timerow">
         <button id="play" class="mini">▶</button>
@@ -222,8 +226,8 @@
   <footer>
     <b>How it works.</b>&nbsp; A Lyapunov function V(x) is an “energy” that must stay positive and <em>decrease</em>
     along every trajectory for the equilibrium to be stable. The surface is V(x); its floor and skin are tinted
-    <span style="color:var(--good)">green where V̇ = ∇V·f &lt; 0</span> (energy draining) and
-    <span style="color:var(--bad)">red where V̇ &gt; 0</span>. A trajectory (integrated with RK4) is drawn both in the
+    <span style="color:var(--good)">green where <span class="mono">V̇</span> = ∇V·f &lt; 0</span> (energy draining) and
+    <span style="color:var(--bad)">red where <span class="mono">V̇</span> &gt; 0</span>. A trajectory (integrated with RK4) is drawn both in the
     x-y plane and lifted onto the surface, so you can watch the state slide downhill. On the right, V(x(t)) falls
     monotonically exactly when the whole path stays in the green. Everything runs client-side.
   </footer>
@@ -377,7 +381,9 @@ function floorPick(px,py){
    5. MESH SAMPLING  —  V and V̇ on a state-space grid
    ================================================================ */
 const GRID=42;
-let mesh=null;   // {G, V[], Vd[], scale, capR, HZ}
+let mesh=null;   // {G, V[], Vd[], vLo, vHi}
+let zRange={auto:true,min:0,max:1};   // V-axis (height) range; auto until the user sets V min/V max
+const ZSPAN=1.75;                     // surface vertical extent (in normalized proj units)
 function quantile(sorted,q){if(!sorted.length)return 0;const i=clamp(q*(sorted.length-1),0,sorted.length-1),lo=Math.floor(i),hi=Math.ceil(i);return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo);}
 const gX1=i=>view.x1min+i/(GRID-1)*(view.x1max-view.x1min);
 const gX2=j=>view.x2min+j/(GRID-1)*(view.x2max-view.x2min);
@@ -387,13 +393,15 @@ function buildMesh(){
   for(let i=0;i<G;i++)for(let j=0;j<G;j++){
     const x1=gX1(i),x2=gX2(j); let v,vd;
     try{ v=Vfn(x1,x2); vd=Vdot(x1,x2,0); }catch(e){ v=NaN; vd=NaN; }
-    V[i*G+j]=v; Vd[i*G+j]=vd; if(isFinite(v)) fin.push(Math.abs(v));
+    V[i*G+j]=v; Vd[i*G+j]=vd; if(isFinite(v)) fin.push(v);
   }
   fin.sort((a,b)=>a-b);
-  const scale=Math.max(quantile(fin,0.75),1e-9);
-  mesh={G,V,Vd,scale,capR:5.5,HZ:0.36};
+  const vHi=quantile(fin,0.96), vLo=Math.min(0,quantile(fin,0.02));   // clip a few extreme corners
+  mesh={G,V,Vd,vLo,vHi:Math.max(vHi,vLo+1e-6)};
 }
-const heightOf=v=>clamp((isFinite(v)?v:0)/mesh.scale,-mesh.capR,mesh.capR)*mesh.HZ;
+// height maps V linearly onto [zRange.min, zRange.max] → [0, ZSPAN] (auto range, or user-set V min/max)
+function heightOf(v){ if(!mesh) return 0; if(!isFinite(v)) v=0; const s=(zRange.max-zRange.min)||1;
+  return clamp((v-zRange.min)/s,-0.12,1.1)*ZSPAN; }
 // V̇ sign → colour (green decreasing / red increasing), intensity ∝ |V̇| (normalized)
 let vdScale=1;
 function vdColor(vd,alpha){
@@ -575,9 +583,24 @@ function drawTimeMarkerLeft(ctx){
   ctx.lineWidth=2;ctx.strokeStyle=active.color;ctx.beginPath();ctx.arc(su[0],su[1],5.5,0,7);ctx.stroke();ctx.restore();
 }
 function drawAxes(ctx){
+  // vertical V (z) axis drawn at the back-most base corner, with ticks that read V
+  const corners=[[-1,-1],[1,-1],[1,1],[-1,1]]; let bc=corners[0],bd=-Infinity;
+  for(const c of corners){ const p=proj(c[0],c[1],0); if(p[2]>bd){bd=p[2];bc=c;} }
+  const bot=proj(bc[0],bc[1],heightOf(zRange.min)), top=proj(bc[0],bc[1],heightOf(zRange.max));
+  ctx.strokeStyle='rgba(138,166,198,.5)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(bot[0],bot[1]);ctx.lineTo(top[0],top[1]);ctx.stroke();
+  const step=niceStep(zRange.max-zRange.min,4);
+  ctx.fillStyle='rgba(138,166,198,.7)';ctx.font='9px ui-monospace,monospace';ctx.textAlign='right';
+  for(let z=Math.ceil(zRange.min/step)*step; z<=zRange.max+1e-9; z+=step){
+    const p=proj(bc[0],bc[1],heightOf(z));
+    ctx.beginPath();ctx.moveTo(p[0],p[1]);ctx.lineTo(p[0]-4,p[1]);ctx.stroke();
+    ctx.fillText(fmtTick(z),p[0]-7,p[1]+3);
+  }
+  ctx.textAlign='left';
   ctx.fillStyle='rgba(234,241,251,.8)';ctx.font='11px ui-monospace,monospace';
-  const lx=proj(1.14,0,0), ly=proj(0,1.14,0), lz=proj(-1,-1,mesh.capR*mesh.HZ+0.1);
-  ctx.fillText('x₁',lx[0]-4,lx[1]+4); ctx.fillText('x₂',ly[0]-4,ly[1]+4); ctx.fillText('V',lz[0]-4,lz[1]);
+  ctx.fillText('V',top[0]-4,top[1]-7);
+  const lx=proj(1.14,0,0), ly=proj(0,1.14,0);
+  ctx.fillText('x₁',lx[0]-4,lx[1]+4); ctx.fillText('x₂',ly[0]-4,ly[1]+4);
 }
 /* ================================================================
    8. RENDER — RIGHT PLOT  V(x(t))  with the V̇ tangent
@@ -630,7 +653,7 @@ function setCond(id,ok){ const e=el(id); e.classList.toggle('ok',ok); e.classLis
 function computeVerdict(){
   const box=el('verdict'); if(!Vfn||!Ffn) return;
   const f0=Ffn(0,0,0), eqOK=isFinite(f0[0])&&isFinite(f0[1])&&Math.hypot(f0[0],f0[1])<1e-4;
-  const V0=Vfn(0,0), sc=mesh?mesh.scale:1, v0OK=Math.abs(V0)<1e-4*Math.max(1,sc);
+  const V0=Vfn(0,0), sc=mesh?Math.max(Math.abs(mesh.vHi),1):1, v0OK=Math.abs(V0)<1e-4*Math.max(1,sc);
   const R=0.15*Math.min(view.x1max-view.x1min,view.x2max-view.x2min);
   let vpos=true, vdneg=true;
   for(const r of [R*0.35,R*0.7,R]) for(let k=0;k<16;k++){ const th=k/16*2*Math.PI, x1=r*Math.cos(th), x2=r*Math.sin(th);
@@ -651,9 +674,13 @@ function computeVerdict(){
    ================================================================ */
 function onModelChange(){
   buildMesh();
-  if(mesh){ const a=[]; for(const v of mesh.Vd) if(isFinite(v)) a.push(Math.abs(v)); a.sort((x,y)=>x-y); vdScale=Math.max(quantile(a,0.85),1e-9); }
+  if(mesh){
+    if(zRange.auto){ zRange.min=mesh.vLo; zRange.max=mesh.vHi; syncZFields(); }
+    const a=[]; for(const v of mesh.Vd) if(isFinite(v)) a.push(Math.abs(v)); a.sort((x,y)=>x-y); vdScale=Math.max(quantile(a,0.85),1e-9);
+  }
   computeVerdict(); leftCache=null; renderLeft(); renderRight(); updateReadouts();
 }
+function syncZFields(){ el('zmin').value=+zRange.min.toFixed(3); el('zmax').value=+zRange.max.toFixed(3); }
 function updateReadouts(){
   let s=null;
   if(active) s=trajAt(active,tCursor);
@@ -699,6 +726,12 @@ function readFields(){
 ['x1min','x1max','x2min','x2max','dur'].forEach(id=>el(id).addEventListener('change',readFields));
 ['ic1','ic2'].forEach(id=>el(id).addEventListener('change',()=>{ const a=parseFloat(el('ic1').value),b=parseFloat(el('ic2').value);
   if(!isFinite(a)||!isFinite(b))return; pendingIC={x1:a,x2:b}; active=null; leftCache=null; renderLeft(); renderRight(); updateReadouts(); }));
+// V-axis (z) range: both valid → manual; blank/invalid → back to auto
+['zmin','zmax'].forEach(id=>el(id).addEventListener('change',()=>{
+  const a=parseFloat(el('zmin').value), b=parseFloat(el('zmax').value);
+  if(isFinite(a)&&isFinite(b)&&b>a){ zRange.auto=false; zRange.min=a; zRange.max=b; leftCache=null; renderLeft(); }
+  else { zRange.auto=true; onModelChange(); }
+}));
 
 el('render').onclick=()=>{ if(compile()) onModelChange(); };
 [el('f1'),el('f2'),el('V')].forEach(inp=>inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ if(compile()) onModelChange(); }}));
