@@ -92,6 +92,9 @@
   .ro .v{font-family:var(--mono);font-size:14px;font-weight:600;margin-top:2px}
   .ro.seg .v{display:flex;align-items:center;gap:6px}
   .swatch{width:11px;height:11px;border-radius:2px;display:inline-block;flex:0 0 auto}
+  /* cursor readout tiles: fixed width so values never reflow / wrap mid-animation */
+  .curros .ro{flex:0 0 172px;width:172px;overflow:hidden}
+  .curros .ro .v{white-space:nowrap;overflow:hidden}
 
   .axisrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 9px;min-height:30px}
   .status{font-size:12px;color:var(--muted);min-height:15px;margin-top:8px}
@@ -174,7 +177,7 @@
         <span class="k">Trace speed <b id="spdVal" class="lc">1.0×</b></span>
         <input id="spd" type="range" min="-1" max="4" step="0.05" value="0">
       </div>
-      <div class="ros" style="flex:1 1 auto">
+      <div class="ros curros" style="flex:1 1 auto">
         <div class="ro seg"><div class="k">on contour</div><div class="v" id="roSeg"><span class="swatch" id="segSw"></span><span id="segName">—</span></div></div>
         <div class="ro"><div class="k">s</div><div class="v" id="roS">—</div></div>
         <div class="ro"><div class="k">L(s)</div><div class="v" id="roL">—</div></div>
@@ -471,6 +474,9 @@ function niceStep(span,target){const raw=span/target,mag=Math.pow(10,Math.floor(
 const fmt3=v=>!isFinite(v)?'∞':(Math.abs(v)>=1000||(Math.abs(v)<0.01&&v!==0))?v.toExponential(2):(Math.round(v*1000)/1000).toString();
 const fmtTick=v=>{const a=Math.abs(v);return a>=1000||(a<0.01&&a>0)?v.toExponential(0):(Math.round(v*100)/100).toString();};
 function fmtC(re,im){const r=fmt3(re);if(Math.abs(im)<1e-9)return r;return `${r} ${im<0?'−':'+'} ${fmt3(Math.abs(im))}j`;}
+// 2-decimal, fixed-form variants for the cursor readouts (bounded width → no reflow)
+const fmt2n=v=>!isFinite(v)?'∞':(Math.abs(v)>=1000||(Math.abs(v)<0.01&&v!==0))?v.toExponential(1):v.toFixed(2);
+function fmtC2(re,im){const r=fmt2n(re);if(Math.abs(im)<1e-9)return r;return `${r} ${im<0?'−':'+'} ${fmt2n(Math.abs(im))}j`;}
 function drawGrid(ctx,A,labX,labY,opt){
   const M=A.M; opt=opt||{};
   ctx.save(); ctx.beginPath(); ctx.rect(PAD.l,PAD.t,M.W,M.H); ctx.clip();
@@ -501,7 +507,7 @@ const STYLE={
   indent:{color:'#B98CFF',dash:[2,4]},
   arc:{color:'#8AA6C6',dash:[2,5]}
 };
-const SEGNAME={posjw:'+jω axis',negjw:'−jω axis',indent:'pole indentation',arc:'∞-arc (R→∞)'};
+const SEGNAME={posjw:'+jω axis',negjw:'−jω axis',indent:'indentation',arc:'∞-arc'};
 function cosCluster(a,b,n){ // n+1 samples in [a,b], clustered near both ends
   const out=[]; for(let i=0;i<=n;i++){const f=(1-Math.cos(Math.PI*i/n))/2; out.push(a+(b-a)*f);} return out;
 }
@@ -824,11 +830,11 @@ function updateReadouts(){
   const cp=curPt(), L=curL();
   if(!cp){ ['roSeg','roS','roL','roLmag','roOL'].forEach(id=>el(id).textContent='—'); return; }
   el('segSw').style.background=STYLE[cp.type].color; el('segName').textContent=SEGNAME[cp.type];
-  el('roS').textContent=fmtC(cp.s[0],cp.s[1]);
+  el('roS').textContent=fmtC2(cp.s[0],cp.s[1]);
   if(isFinite(L[0])&&isFinite(L[1])){
-    el('roL').textContent=fmtC(L[0],L[1]);
-    el('roLmag').textContent=`${fmt3(cabs(L))}  ·  ${fmt3(carg(L)*180/Math.PI)}°`;
-    const ol=cadd(L,[1,0]); el('roOL').textContent=fmtC(ol[0],ol[1]);
+    el('roL').textContent=fmtC2(L[0],L[1]);
+    el('roLmag').textContent=`${fmt2n(cabs(L))}  ·  ${fmt2n(carg(L)*180/Math.PI)}°`;
+    const ol=cadd(L,[1,0]); el('roOL').textContent=fmtC2(ol[0],ol[1]);
   } else { el('roL').textContent='∞'; el('roLmag').textContent='∞'; el('roOL').textContent='∞'; }
 }
 function updateStability(){

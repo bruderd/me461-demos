@@ -94,6 +94,13 @@ teaching artifact. The reference implementation is `demos/cruise-control/index.h
       around jω-axis poles (kept outside), and a dotted ∞-arc; (right) the autoscaled Nyquist plot with −1 marked. A
       single cursor rides the contour (draggable on ANY of the three plots, or auto-traced clockwise); the +jω axis,
       the Bode curves, and the corresponding Nyquist arc all share maize. Full stability readout Z = N + P (+ GM/PM).
+- [x] Lyapunov Function Explorer (`demos/lyapunov/`) — enter a 2-D ẋ=f(x) and a candidate V(x); V̇=∇V·f is
+      computed numerically. LEFT: a hand-rolled 3-D surface of V(x) (translucent, back-to-front) over the state
+      plane, its floor + skin tinted green where V̇<0 / red where V̇>0, the phase-portrait vector field on the
+      floor, and each RK4 trajectory drawn BOTH in the x-y plane and lifted onto the surface (persist until Clear).
+      View-toggle: iso / overhead (x-y) / x-V / y-V. RIGHT: V(x(t)) for all runs (latest tracked) with a
+      draggable time slider + play, and a short tangent line whose slope = V̇. Live "valid Lyapunov function?"
+      verdict at the origin (f(0)=0, V(0)=0, V>0 & V̇<0 on a small disk).
 - [ ] DC motor (position/speed control; V→current→torque).
 - [ ] Inverted pendulum / cart-pole (stabilization; nonlinear, great for state feedback).
 - [ ] Ball & beam.
@@ -134,7 +141,57 @@ Keep all of them on the same skeleton so students recognize the interface across
 
 Where we left off, so the conversation can be cleared and resumed later.
 
-### Status: Nyquist Stability Explorer is DONE + verified — NOT committed (NEWEST work).
+### Status: Lyapunov Function Explorer is DONE + verified — NOT committed (NEWEST work).
+- Files: `demos/lyapunov/index.html` (self-contained single file) and its landing-page card in `index.html`
+  (added, right after the Nyquist card). Roadmap checkbox above ticked. Live target once pushed:
+  `https://danielbruder.com/me461-demos/demos/lyapunov/`. Uncommitted with all prior work; standing rule
+  unchanged (commit/push only when asked; verify git state first — working dir may not be git root).
+
+**Design decisions the user chose** (asked up front via multiple-choice, all "recommended" picks):
+- **V̇ coloring = floor + surface**: both the xy-plane floor and the V(x) surface are tinted green where V̇<0 /
+  red where V̇>0 (intensity ∝ |V̇| normalized by the 85th-pctile of |V̇| on the grid). This is THE Lyapunov map.
+- **V-vs-t shows ALL persisted trajectories**, color-matched; the time slider + V̇ tangent track the **latest**
+  (`active`) run.
+- **Auto Lyapunov verdict at the origin**: checks f(0)=0, V(0)=0, and V>0 & V̇≤0 sampled on a small disk
+  (r = 0.15·min span, 3 radii × 16 angles); green/red per-condition dots + a headline. Marks the equilibrium.
+- **Playback = synced marker + play**: dragging the time slider (or scrubbing on the V(t) plot) moves a synced
+  marker on BOTH the 3-D trajectory (ball on the surface + shadow on floor) and the V(t) curve; ▶ auto-sweeps.
+
+**Reuse.** Compiles f1,f2,V via the phase-portrait `new Function`+`MATH_PRELUDE` pattern (states x1,x2; other
+letters → tunable param sliders; `^`→`**`). RK4 + `integrate` from phase-portrait, extended so each stored
+point carries `{t,x1,x2,V,Vd}`. 3-D orthographic projection (`proj`/`floorPick`, az about vertical + el tilt)
+lifted from the Laplace demo. Default example = stable spiral `ẋ=(-x1+x2,-x1-x2)`, `V=x1²+x2²` (V̇=-2‖x‖²<0
+everywhere → all-green bowl, verdict valid).
+
+**Non-obvious plumbing / gotchas (don't re-break).**
+- **V̇ is numeric**: `Vdot = ∂V/∂x·f` via central differences (h=1e-4·(1+‖x‖)). No symbolic diff.
+- **Surface is translucent, drawn back-to-front** (`quads.sort((p,q)=>q.d-p.d)`, alpha≈0.62·shade) so the floor
+  vector field + xy-trajectory show THROUGH it. Draw order: floor tint quads (coplanar, no sort) → vector field →
+  floor trajectory shadows (dashed) → translucent surface quads (sorted) → surface trajectories → equilibrium →
+  IC crosshair / time marker. Floor quads are coplanar at w=0 so they need no depth sort.
+- **Static/dynamic split for playback**: `renderLeft()` draws the whole static scene then snapshots it into an
+  offscreen `leftCache`; during playback `paintLeftMarker()` just blits the cache + draws the moving ball — so a
+  ~1800-quad scene isn't re-sorted every frame. ANY static change must set `leftCache=null` before re-rendering
+  (all the handlers do this). The right V(t) plot is cheap enough to fully redraw each frame.
+- **View presets** (`VIEWS`): iso {az:-0.62,el:0.52}; top {az:0,el:1.5563≈89°}; xz {az:0,el:0.055 edge-on};
+  yz {az:-1.5708,el:0.055}. `setView` tweens az/el (smoothstep, 380ms) AND toggles the seg button. **Click-to-set-IC
+  is disabled when el≤0.22** (edge-on views make `floorPick` — which divides by se — degenerate); it tells the user
+  to switch to Iso/Overhead. Height model `heightOf(V)=clamp(V/scale,-capR,capR)·HZ` with scale=75th-pctile |V|,
+  capR=5.5, HZ=0.36.
+- **`trajAt(tr,t)`** binary-searches the stored samples and linearly interpolates {x1,x2,V,Vd} — used by the marker,
+  readouts, and the tangent. (Watch: the `(cond?a:b)=m` ternary-lvalue is NOT valid JS — it must be
+  `if(cond)a=m; else b=m;`; that was the one syntax bug caught by `node --check`.)
+- Number-entry fields use `.nospin`; Greek/labels wrapped in `.lc`. Same house conventions as siblings.
+
+**Verified this session** (scratchpad, reusable): `node --check` clean; **17/17 logic asserts** (`test_lyap.mjs` —
+numeric V̇ vs analytic for the spiral/pendulum, V monotonically decreasing + converging to 0 along the stable
+run, indefinite-V̇ saddle signs, unstable-node V-growth, blow-up guard bounds the array). Headless-Chrome
+(Chrome.app `--headless=new`, error-catcher + RESULT-div probe): **no JS errors**; default → verdict all-green
+"✓ valid", a run gives V 9.25→0 (monotone), scrub at t=6 reads V≈5.7e-5/V̇≈-1.1e-4, view toggle → 'top', 2nd run
+persists (2 traces), `V=x1` → verdict "not positive-definite" (box red). Screenshot confirms the translucent green
+bowl with the vector field showing through, the lifted trajectory, and the V(t) plot + tangent.
+
+### Status: Nyquist Stability Explorer is DONE + verified — NOT committed (was NEWEST; see above).
 - Files: `demos/nyquist/index.html` (self-contained single file) and its landing-page card in `index.html`
   (added, right after the Two-Compartment Drug Delivery card). Roadmap checkbox above ticked. Live target once
   pushed: `https://danielbruder.com/me461-demos/demos/nyquist/`. Still uncommitted with all prior work; standing
@@ -185,6 +242,12 @@ log-clustered near ω≈0 plus extra points around each corner freq (magnitudes 
   so no offscreen caching is needed. `Lpts` (L at every contour point) is cached at rebuild, not per frame.
 - Greek/subscripts (σ, ω, L(s), y_d-style) inside uppercased `.card h2`/`.k`/`.lbl` are wrapped in
   `.lc{text-transform:none}` — same finding as the sibling demos. s-entry number fields use `.nospin`.
+- **Cursor readout tiles are FIXED WIDTH** (`.curros .ro{flex:0 0 172px;width:172px;overflow:hidden}` +
+  `.v{white-space:nowrap;overflow:hidden}`). Before this they were `.ros` flex tiles that grew with the value,
+  so a wide number would push the row over its width and momentarily wrap to a new line during a trace — a
+  reported bug. The cursor values (s, L(s), |L|·∠L, 1+L) print with **2 decimals** via `fmt2n`/`fmtC2`
+  (exponential fallback only for |v|≥1000 or <0.01 → width stays bounded); the poles/zeros list still uses the
+  3-decimal `fmt3`. Segment labels were shortened (`indentation`, `∞-arc`) so the segment tile fits 172px.
 
 **Verified this session** (scratchpad, reusable): `node --check` clean on the extracted script; **31/31 logic
 asserts** (`test_logic.mjs` — evalL, rational expansion coeffs, Durand-Kerner roots, canonical N/Z across k vs

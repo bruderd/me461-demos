@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MECHENG 461 · Lyapunov Function Explorer</title>
+<style>
+  :root{
+    --navy:#00274C; --navy-2:#0A1B33; --panel:#102A4C;
+    --maize:#FFCB05; --cyan:#57C7FF; --ink:#EAF1FB; --muted:#8AA6C6;
+    --grid:rgba(138,166,198,.16); --good:#5BD6A0; --bad:#FF6B6B;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--navy-2)}
+  body{background:linear-gradient(180deg,#0B1A30,#08111F 60%);color:var(--ink);font-family:var(--sans);
+       -webkit-font-smoothing:antialiased;padding:22px;min-height:100vh}
+  .wrap{max-width:1180px;margin:0 auto}
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:4px}
+  header .tag{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--maize);
+              border:1px solid rgba(255,203,5,.35);padding:3px 8px;border-radius:4px}
+  h1{font-size:20px;font-weight:650;margin:0;letter-spacing:.01em}
+  header .sub{color:var(--muted);font-size:13px}
+  .card{background:linear-gradient(180deg,var(--panel),#0C2140);border:1px solid rgba(138,166,198,.16);
+        border-radius:12px;padding:14px;margin-top:16px}
+  .card h2{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+           color:var(--muted);margin:0 0 10px;font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .card h2 .note{font-family:var(--sans);letter-spacing:0;text-transform:none;font-size:11px;color:var(--muted);font-weight:400}
+  .lc{text-transform:none}
+  canvas{display:block;width:100%;border-radius:8px}
+
+  input[type=text],input[type=number]{background:#08182f;color:#cfe3ff;border:1px solid rgba(138,166,198,.2);
+    border-radius:8px;padding:9px 10px;font-family:var(--mono);font-size:14px;width:100%}
+  input[type=text]:focus,input[type=number]:focus{outline:none;border-color:rgba(255,203,5,.6)}
+  input.nospin{-moz-appearance:textfield;appearance:textfield}
+  input.nospin::-webkit-inner-spin-button,input.nospin::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+  #err{font-family:var(--mono);font-size:12px;color:var(--bad);min-height:15px;margin-top:8px;white-space:pre-wrap}
+  .hint{font-size:12px;color:var(--muted);line-height:1.55;margin-top:8px}
+  code{font-family:var(--mono);background:#0a1d38;padding:1px 5px;border-radius:4px;font-size:12px}
+
+  /* ---- system definition ---- */
+  .eqs{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end}
+  @media(max-width:820px){.eqs{grid-template-columns:1fr}}
+  .eq{display:flex;flex-direction:column;gap:4px}
+  .eq .lab{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .eq .lab b{color:var(--ink)}
+
+  /* ---- parameter sliders ---- */
+  .params{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px 16px;margin-top:12px}
+  .params:empty{display:none}
+  .prm label{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12px;margin-bottom:5px}
+  .prm label b{color:var(--maize)}
+  .prm .lo{display:flex;gap:8px;align-items:center}
+  .prm input[type=number]{width:74px;padding:5px 7px;font-size:12px}
+  input[type=range]{-webkit-appearance:none;appearance:none;flex:1;height:4px;border-radius:3px;
+    background:linear-gradient(90deg,var(--maize) 0%,var(--maize) var(--fill,50%),#20406b var(--fill,50%));outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--ink);border:2px solid var(--maize);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--ink);
+    border:2px solid var(--maize);cursor:pointer}
+
+  /* ---- controls ---- */
+  .ctrls{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;justify-content:space-between}
+  .fields{display:flex;gap:10px;flex-wrap:wrap}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  .field input{width:80px}
+  .field.ic .k{color:var(--maize)} .field.ic input{border-color:rgba(255,203,5,.4)}
+  .readouts{display:flex;gap:8px;flex-wrap:wrap}
+  .ro{background:#0A1D38;border:1px solid rgba(138,166,198,.14);border-radius:8px;padding:6px 10px;min-width:64px}
+  .ro .k{font-family:var(--mono);font-size:9px;letter-spacing:.09em;color:var(--muted);text-transform:uppercase}
+  .ro .v{font-family:var(--mono);font-size:15px;font-weight:600;margin-top:1px}
+  .btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  button{font-family:var(--sans);font-size:13px;font-weight:600;border:1px solid rgba(138,166,198,.25);
+    background:#122f52;color:var(--ink);padding:9px 15px;border-radius:8px;cursor:pointer;transition:.12s}
+  button:hover{background:#173a66}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.primary{background:var(--maize);color:#08213f;border-color:transparent}
+  button.primary:hover{filter:brightness(1.06)}
+  button.mini{padding:6px 10px;font-size:12px}
+
+  /* ---- view toggle (segmented) ---- */
+  .seg{display:inline-flex;border:1px solid rgba(138,166,198,.25);border-radius:8px;overflow:hidden}
+  .seg button{border:0;border-radius:0;background:#0e2748;padding:8px 12px;font-size:12px}
+  .seg button+button{border-left:1px solid rgba(138,166,198,.18)}
+  .seg button.on{background:var(--maize);color:#08213f}
+
+  /* ---- verdict box ---- */
+  .verdict{display:flex;flex-direction:column;gap:5px;background:#0A1D38;border:1px solid rgba(138,166,198,.16);
+           border-radius:10px;padding:10px 12px;min-width:250px}
+  .verdict .vh{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  .verdict .cond{font-family:var(--mono);font-size:12px;display:flex;align-items:center;gap:7px}
+  .verdict .cond .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:0 0 auto}
+  .verdict .cond.ok .dot{background:var(--good)} .verdict .cond.no .dot{background:var(--bad)}
+  .verdict .headline{font-family:var(--mono);font-size:13px;font-weight:700;margin-top:2px}
+  .verdict.good{border-color:rgba(91,214,160,.4)} .verdict.good .headline{color:var(--good)}
+  .verdict.bad{border-color:rgba(255,107,107,.35)} .verdict.bad .headline{color:var(--bad)}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  .grid>.card{margin-top:0}
+  #surf{background:radial-gradient(120% 120% at 50% 42%,#0d2740,#080f1c);height:460px;cursor:grab;touch-action:none}
+  #surf:active{cursor:grabbing}
+  #vt{background:linear-gradient(180deg,#0d2a52,#0a1830);height:390px;cursor:crosshair;touch-action:none}
+
+  .timerow{display:flex;gap:12px;align-items:center;margin-top:10px}
+  .timerow .tslide{flex:1 1 auto}
+  .timerow input[type=range]{background:linear-gradient(90deg,var(--cyan) 0%,var(--cyan) var(--fill,0%),#20406b var(--fill,0%))}
+  .timerow input[type=range]::-webkit-slider-thumb{border-color:var(--cyan)}
+  .timerow input[type=range]::-moz-range-thumb{border-color:var(--cyan)}
+
+  .speed{display:flex;flex-direction:column;gap:5px;min-width:150px}
+  .speed .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;
+    display:flex;justify-content:space-between;align-items:baseline} .speed .k b{color:var(--maize);font-size:12px}
+
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:8px}
+  .legend span{display:flex;align-items:center;gap:5px}
+  .legend i{width:13px;height:13px;border-radius:3px;display:inline-block}
+  .status{font-size:12px;color:var(--muted);min-height:15px;margin-top:6px}
+  .status.warn{color:var(--maize)}
+  footer{color:var(--muted);font-size:12px;margin-top:18px;line-height:1.6}
+  footer b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="tag">MECHENG&nbsp;461</span>
+    <h1>Lyapunov Function Explorer</h1>
+    <span class="sub">watch V(x) fall along the flow of ẋ = f(x)</span>
+  </header>
+
+  <!-- ============ SYSTEM ============ -->
+  <div class="card">
+    <h2>system <span class="m lc">ẋ = f(x)</span> &nbsp;and&nbsp; candidate <span class="m lc">V(x)</span>
+        <span class="note">V̇(x) = ∇V·f is computed for you</span></h2>
+    <div class="eqs">
+      <div class="eq"><span class="lab"><b>ẋ<sub>1</sub></b> = (fn of x1, x2)</span><input id="f1" type="text" spellcheck="false" value="-x1 + x2"></div>
+      <div class="eq"><span class="lab"><b>ẋ<sub>2</sub></b> = (fn of x1, x2)</span><input id="f2" type="text" spellcheck="false" value="-x1 - x2"></div>
+      <div class="eq"><span class="lab"><b>V</b>(x) = (fn of x1, x2)</span><input id="V" type="text" spellcheck="false" value="x1^2 + x2^2"></div>
+      <button id="render" class="primary">Build</button>
+    </div>
+    <div id="err"></div>
+    <div id="params" class="params"></div>
+    <div class="hint">
+      States are <code>x1</code>,<code>x2</code>. Available: <code>sin cos tan exp log sqrt abs sign …</code>,
+      <code>pi</code>, <code>^</code> for powers. Any other letter (e.g. <code>a</code>, <code>b</code>) becomes a
+      tunable <b>parameter</b> with a slider. The equilibrium is taken at the origin.
+    </div>
+  </div>
+
+  <!-- ============ CONTROLS ============ -->
+  <div class="card">
+    <div class="ctrls">
+      <div class="fields">
+        <div class="field"><span class="k">x₁ min</span><input id="x1min" class="nospin" type="number" step="any" value="-4"></div>
+        <div class="field"><span class="k">x₁ max</span><input id="x1max" class="nospin" type="number" step="any" value="4"></div>
+        <div class="field"><span class="k">x₂ min</span><input id="x2min" class="nospin" type="number" step="any" value="-4"></div>
+        <div class="field"><span class="k">x₂ max</span><input id="x2max" class="nospin" type="number" step="any" value="4"></div>
+        <div class="field"><span class="k">Duration</span><input id="dur" class="nospin" type="number" step="any" min="0.5" value="12"></div>
+        <div class="field ic"><span class="k">x₁(0)</span><input id="ic1" class="nospin" type="number" step="any" value="3"></div>
+        <div class="field ic"><span class="k">x₂(0)</span><input id="ic2" class="nospin" type="number" step="any" value="0.5"></div>
+      </div>
+      <div class="btns">
+        <button id="run" class="primary">Run ▶</button>
+        <button id="clear">Clear traces</button>
+        <button id="resetView" class="mini">Reset view</button>
+      </div>
+    </div>
+    <div class="ctrls" style="margin-top:12px">
+      <div class="seg" id="viewSeg">
+        <button data-view="iso" class="on">Iso</button>
+        <button data-view="top">Overhead (x-y)</button>
+        <button data-view="xz">x–V (x-z)</button>
+        <button data-view="yz">y–V (y-z)</button>
+      </div>
+      <div class="readouts">
+        <div class="ro"><div class="k">x</div><div class="v" id="roX">—</div></div>
+        <div class="ro"><div class="k">V(x)</div><div class="v" id="roV">—</div></div>
+        <div class="ro"><div class="k">V̇(x)</div><div class="v" id="roVd">—</div></div>
+        <div class="ro"><div class="k">t</div><div class="v" id="roT">0.00</div></div>
+      </div>
+      <div class="verdict" id="verdict">
+        <span class="vh">Lyapunov check · equilibrium at origin</span>
+        <span class="cond" id="cEq"><span class="dot"></span>origin is an equilibrium, f(0)=0</span>
+        <span class="cond" id="cV0"><span class="dot"></span>V(0) = 0</span>
+        <span class="cond" id="cVpos"><span class="dot"></span>V &gt; 0 near origin</span>
+        <span class="cond" id="cVdot"><span class="dot"></span>V̇ &lt; 0 near origin</span>
+        <span class="headline" id="vHead">—</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PLOTS ============ -->
+  <div class="grid">
+    <div class="card">
+      <h2>V(x) over state space <span class="note">drag = rotate · shift-drag = pan · wheel = zoom · click floor = set x(0)</span></h2>
+      <canvas id="surf"></canvas>
+      <div class="legend">
+        <span><i style="background:var(--good)"></i>V̇ &lt; 0 (V decreasing)</span>
+        <span><i style="background:var(--bad)"></i>V̇ &gt; 0 (V increasing)</span>
+        <span><i style="background:var(--muted)"></i>vector field ẋ = f(x)</span>
+      </div>
+      <div class="status" id="sstatus"></div>
+    </div>
+    <div class="card">
+      <h2>V(x(t)) along the trajectory <span class="note">drag to scrub · tangent slope = V̇</span></h2>
+      <canvas id="vt"></canvas>
+      <div class="timerow">
+        <button id="play" class="mini">▶</button>
+        <input id="tslide" class="tslide" type="range" min="0" max="1" step="0.001" value="0">
+        <div class="speed">
+          <span class="k">Speed <b id="spdVal" class="lc">1.0×</b></span>
+          <input id="spd" type="range" min="-1" max="4" step="0.05" value="0">
+        </div>
+      </div>
+      <div class="status" id="vstatus">Run a trajectory to see V(t). Each run is kept until you Clear.</div>
+    </div>
+  </div>
+
+  <footer>
+    <b>How it works.</b>&nbsp; A Lyapunov function V(x) is an “energy” that must stay positive and <em>decrease</em>
+    along every trajectory for the equilibrium to be stable. The surface is V(x); its floor and skin are tinted
+    <span style="color:var(--good)">green where V̇ = ∇V·f &lt; 0</span> (energy draining) and
+    <span style="color:var(--bad)">red where V̇ &gt; 0</span>. A trajectory (integrated with RK4) is drawn both in the
+    x-y plane and lifted onto the surface, so you can watch the state slide downhill. On the right, V(x(t)) falls
+    monotonically exactly when the whole path stays in the green. Everything runs client-side.
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ================================================================
+   0. STATE
+   ================================================================ */
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const el=id=>document.getElementById(id);
+const VIEW0={x1min:-4,x1max:4,x2min:-4,x2max:4};
+const view={...VIEW0};
+let T=12;                                  // sim duration
+let Ffn=null, Vfn=null;                    // compiled dynamics + Lyapunov candidate
+const params={}; let paramMeta={};
+let pendingIC={x1:3,x2:0.5};
+const traces=[];                           // {pts:[{t,x1,x2,V,Vd}], color, Tend}
+let active=null;                           // latest trajectory (slider/tangent track it)
+let colorIx=0;
+const TRACE_COLORS=['#57C7FF','#FFCB05','#5BD6A0','#FF6B6B','#B79CFF','#FF9F45','#4ADEDE','#F78FB3'];
+const nextColor=()=>TRACE_COLORS[(colorIx++)%TRACE_COLORS.length];
+const SIM_DT=0.01;
+
+/* playback */
+let tCursor=0;           // current time along the active trajectory (s)
+let playing=false, speedMul=1, lastWall=0;
+
+/* ================================================================
+   1. COMPILE  —  f(x) and V(x) from the text boxes
+   ================================================================ */
+const RESERVED=new Set(['x1','x2','t','pi','e','Math','PI','E','Infinity','NaN','true','false']);
+const MATHFNS=new Set(['sin','cos','tan','asin','acos','atan','atan2','sinh','cosh','tanh',
+  'exp','log','log2','log10','sqrt','cbrt','abs','sign','pow','min','max','floor','ceil','round','trunc','hypot']);
+const MATH_PRELUDE='const {abs,sign,sqrt,cbrt,exp,log,log2,log10,sin,cos,tan,asin,acos,atan,'+
+  'atan2,sinh,cosh,tanh,pow,min,max,floor,ceil,round,trunc,hypot}=Math;const pi=Math.PI,e=Math.E;';
+const normalize=s=>s.replace(/x_1/g,'x1').replace(/x_2/g,'x2').replace(/\^/g,'**');
+function scanParams(src){
+  const found=new Set(), re=/[A-Za-z_][A-Za-z0-9_]*/g; let m;
+  while((m=re.exec(src))){
+    if(/^\s*\(/.test(src.slice(re.lastIndex))) continue;
+    if(RESERVED.has(m[0])||MATHFNS.has(m[0])) continue;
+    found.add(m[0]);
+  }
+  return found;
+}
+function compile(){
+  const s1=normalize(el('f1').value), s2=normalize(el('f2').value), sV=normalize(el('V').value);
+  const names=[...new Set([...scanParams(s1),...scanParams(s2),...scanParams(sV)])];
+  let ffn,vfn;
+  try{
+    const decl=names.map(n=>`const ${n}=P[${JSON.stringify(n)}];`).join('');
+    ffn=new Function('x1','x2','t','P',`${MATH_PRELUDE}${decl}return [(${s1}),(${s2})];`);
+    vfn=new Function('x1','x2','P',`${MATH_PRELUDE}${decl}return (${sV});`);
+    const P0=Object.fromEntries(names.map(n=>[n,1]));
+    const tf=ffn(0.3,-0.2,0,P0), tv=vfn(0.3,-0.2,P0);
+    if(!Array.isArray(tf)||!isFinite(tf[0])||!isFinite(tf[1])) throw new Error('ẋ did not return finite [ẋ₁, ẋ₂]');
+    if(!isFinite(tv)) throw new Error('V(x) did not return a finite number');
+  }catch(err){ setErr('⚠ '+err.message); return false; }
+  const keep={},keepMeta={};
+  for(const n of names){ keep[n]=(n in params)?params[n]:1; keepMeta[n]=(n in paramMeta)?paramMeta[n]:{min:-5,max:5}; }
+  for(const k in params) delete params[k]; Object.assign(params,keep); paramMeta=keepMeta;
+  Ffn=(x1,x2,t)=>ffn(x1,x2,t,params);
+  Vfn=(x1,x2)=>vfn(x1,x2,params);
+  setErr(''); buildParamUI(names); return true;
+}
+function setErr(m){ el('err').textContent=m; }
+const fmtP=v=>Math.abs(v)>=100||v===0?v.toFixed(0):Math.abs(v)>=10?v.toFixed(1):v.toFixed(2);
+function buildParamUI(names){
+  const box=el('params'); box.innerHTML='';
+  for(const n of names){
+    const meta=paramMeta[n]; const wrap=document.createElement('div'); wrap.className='prm';
+    wrap.innerHTML=`<label>parameter <b>${n}</b><span class="val" data-v="${n}">${fmtP(params[n])}</span></label>`+
+      `<div class="lo"><input type="range" data-r="${n}" min="${meta.min}" max="${meta.max}" step="0.01" value="${params[n]}">`+
+      `<input type="number" data-n="${n}" step="any" value="${params[n]}"></div>`;
+    box.appendChild(wrap);
+    const range=wrap.querySelector('[data-r]'), num=wrap.querySelector('[data-n]'), lab=wrap.querySelector('[data-v]');
+    const paint=()=>range.style.setProperty('--fill',(range.value-range.min)/(range.max-range.min)*100+'%');
+    range.addEventListener('input',()=>{ params[n]=+range.value; num.value=range.value; lab.textContent=fmtP(params[n]); paint(); onModelChange(); });
+    num.addEventListener('change',()=>{ let v=parseFloat(num.value); if(!isFinite(v))return; params[n]=v; lab.textContent=fmtP(v);
+      if(v<meta.min){meta.min=Math.floor(v);range.min=meta.min;} if(v>meta.max){meta.max=Math.ceil(v);range.max=meta.max;}
+      range.value=v; paint(); onModelChange(); });
+    paint();
+  }
+}
+
+/* ================================================================
+   2. DYNAMICS,  V̇ = ∇V·f (numeric gradient),  RK4
+   ================================================================ */
+function Vdot(x1,x2,t){
+  const h=1e-4*(1+Math.hypot(x1,x2));
+  const vx=(Vfn(x1+h,x2)-Vfn(x1-h,x2))/(2*h);
+  const vy=(Vfn(x1,x2+h)-Vfn(x1,x2-h))/(2*h);
+  const f=Ffn(x1,x2,t||0);
+  return vx*f[0]+vy*f[1];
+}
+function rk4(s,t,dt){
+  const a=Ffn(s.x1,s.x2,t);
+  const b=Ffn(s.x1+.5*dt*a[0],s.x2+.5*dt*a[1],t+.5*dt);
+  const c=Ffn(s.x1+.5*dt*b[0],s.x2+.5*dt*b[1],t+.5*dt);
+  const d=Ffn(s.x1+dt*c[0],s.x2+dt*c[1],t+dt);
+  return {x1:s.x1+dt/6*(a[0]+2*b[0]+2*c[0]+d[0]), x2:s.x2+dt/6*(a[1]+2*b[1]+2*c[1]+d[1])};
+}
+function integrate(ic){
+  const total=Math.round(clamp(T,0.5,1000)/SIM_DT), every=Math.max(1,Math.round(total/900));
+  const mk=(t,x1,x2)=>({t,x1,x2,V:Vfn(x1,x2),Vd:Vdot(x1,x2,t)});
+  const pts=[mk(0,ic.x1,ic.x2)]; let s={x1:ic.x1,x2:ic.x2},t=0;
+  for(let i=0;i<total;i++){
+    s=rk4(s,t,SIM_DT); t+=SIM_DT;
+    if(!isFinite(s.x1)||!isFinite(s.x2)||Math.abs(s.x1)>1e7||Math.abs(s.x2)>1e7){ pts.push(mk(t,s.x1,s.x2)); break; }
+    if(i%every===0||i===total-1) pts.push(mk(t,s.x1,s.x2));
+  }
+  return pts;
+}
+
+/* ================================================================
+   3. CANVAS PLUMBING
+   ================================================================ */
+function fitDPR(cv){
+  const dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight;
+  cv.width=w*dpr; cv.height=h*dpr;
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx,w,h,dpr};
+}
+function niceStep(span,target){const raw=span/target,mag=Math.pow(10,Math.floor(Math.log10(raw))),n=raw/mag;return (n<1.5?1:n<3?2:n<7?5:10)*mag;}
+const fmtTick=v=>{const a=Math.abs(v);return a>=1000||(a<0.01&&a>0)?v.toExponential(0):(Math.round(v*100)/100).toString();};
+const fmt2=v=>!isFinite(v)?'∞':(Math.abs(v)>=1000||(Math.abs(v)<0.01&&v!==0))?v.toExponential(1):v.toFixed(2);
+
+/* ================================================================
+   4. 3-D PROJECTION  (orthographic; az about vertical, el tilt) — from Laplace
+   ================================================================ */
+const view3d={az:-0.62,el:0.52,zoom:1,panx:0,pany:0};
+let PJ=null;
+const uOf=x1=>2*(x1-view.x1min)/(view.x1max-view.x1min)-1;
+const vOf=x2=>2*(x2-view.x2min)/(view.x2max-view.x2min)-1;
+const x1OfU=u=>view.x1min+(u+1)/2*(view.x1max-view.x1min);
+const x2OfV=v=>view.x2min+(v+1)/2*(view.x2max-view.x2min);
+function proj(u,v,w){
+  const {CX,CY,S,ca,sa,ce,se,panx,pany}=PJ;
+  const u1=ca*u-sa*v, v1=sa*u+ca*v;
+  const v2=ce*v1-se*w, w2=se*v1+ce*w;
+  return [CX+panx+S*u1, CY+pany-S*w2, v2];
+}
+function floorPick(px,py){
+  const {CX,CY,S,ca,sa,ce,se,panx,pany}=PJ;
+  const u1=(px-CX-panx)/S, w2=(CY+pany-py)/S, v1=w2/se;
+  return [ca*u1+sa*v1, -sa*u1+ca*v1];
+}
+/* ================================================================
+   5. MESH SAMPLING  —  V and V̇ on a state-space grid
+   ================================================================ */
+const GRID=42;
+let mesh=null;   // {G, V[], Vd[], scale, capR, HZ}
+function quantile(sorted,q){if(!sorted.length)return 0;const i=clamp(q*(sorted.length-1),0,sorted.length-1),lo=Math.floor(i),hi=Math.ceil(i);return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo);}
+const gX1=i=>view.x1min+i/(GRID-1)*(view.x1max-view.x1min);
+const gX2=j=>view.x2min+j/(GRID-1)*(view.x2max-view.x2min);
+function buildMesh(){
+  if(!Vfn||!Ffn){mesh=null;return;}
+  const G=GRID, V=new Float64Array(G*G), Vd=new Float64Array(G*G), fin=[];
+  for(let i=0;i<G;i++)for(let j=0;j<G;j++){
+    const x1=gX1(i),x2=gX2(j); let v,vd;
+    try{ v=Vfn(x1,x2); vd=Vdot(x1,x2,0); }catch(e){ v=NaN; vd=NaN; }
+    V[i*G+j]=v; Vd[i*G+j]=vd; if(isFinite(v)) fin.push(Math.abs(v));
+  }
+  fin.sort((a,b)=>a-b);
+  const scale=Math.max(quantile(fin,0.75),1e-9);
+  mesh={G,V,Vd,scale,capR:5.5,HZ:0.36};
+}
+const heightOf=v=>clamp((isFinite(v)?v:0)/mesh.scale,-mesh.capR,mesh.capR)*mesh.HZ;
+// V̇ sign → colour (green decreasing / red increasing), intensity ∝ |V̇| (normalized)
+let vdScale=1;
+function vdColor(vd,alpha){
+  if(!isFinite(vd)) return 'rgba(138,166,198,'+(alpha*0.3)+')';
+  const t=clamp(Math.abs(vd)/vdScale,0,1);
+  if(vd<0) return `rgba(91,214,160,${(0.12+0.6*t)*alpha})`;
+  return `rgba(255,107,107,${(0.12+0.62*t)*alpha})`;
+}
+
+/* ================================================================
+   6. VIEW PRESETS  (overhead / iso / x-z / y-z) with a short tween
+   ================================================================ */
+const VIEWS={ iso:{az:-0.62,el:0.52}, top:{az:0,el:1.5563}, xz:{az:0,el:0.055}, yz:{az:-1.5708,el:0.055} };
+let curView='iso', tween=null;
+function setView(name){
+  curView=name; const tgt=VIEWS[name];
+  [...el('viewSeg').children].forEach(b=>b.classList.toggle('on',b.dataset.view===name));
+  tween={a0:view3d.az,e0:view3d.el,a1:tgt.az,e1:tgt.el,t0:performance.now(),dur:380};
+  requestAnimationFrame(tweenStep);
+}
+function tweenStep(now){
+  if(!tween) return;
+  const k=clamp((now-tween.t0)/tween.dur,0,1), s=k*k*(3-2*k);
+  view3d.az=tween.a0+(tween.a1-tween.a0)*s; view3d.el=tween.e0+(tween.e1-tween.e0)*s;
+  renderLeft();
+  if(k<1) requestAnimationFrame(tweenStep); else tween=null;
+}
+
+/* ================================================================
+   7. RENDER — LEFT 3-D PLOT
+   ================================================================ */
+const surf=el('surf');
+let leftCache=null;   // offscreen snapshot of the static scene (blitted each playback frame)
+function renderLeft(){
+  const {ctx,w,h}=fitDPR(surf);
+  ctx.clearRect(0,0,w,h);
+  const S=Math.min(w,h)*0.34;
+  PJ={CX:w*0.5,CY:h*0.60,S:S*view3d.zoom,panx:view3d.panx,pany:view3d.pany,
+      ca:Math.cos(view3d.az),sa:Math.sin(view3d.az),ce:Math.cos(view3d.el),se:Math.max(0.05,Math.sin(view3d.el))};
+  if(!mesh){ ctx.fillStyle='rgba(138,166,198,.6)';ctx.font='13px var(--mono)';ctx.fillText('Build a system to see V(x).',20,30); leftCache=null; return; }
+  drawFloor(ctx);
+  if(Ffn) drawField(ctx);
+  for(const tr of traces) drawFloorTrace(ctx,tr,0.28);
+  drawSurface(ctx);
+  for(const tr of traces) drawSurfaceTrace(ctx,tr);
+  drawEquilibrium(ctx);
+  if(!active && pendingIC) drawIC(ctx);
+  drawAxes(ctx);
+  // snapshot for fast marker re-draw during playback
+  if(!leftCache) leftCache=document.createElement('canvas');
+  leftCache.width=surf.width; leftCache.height=surf.height;
+  leftCache.getContext('2d').drawImage(surf,0,0);
+  drawTimeMarkerLeft(ctx);
+}
+function paintLeftMarker(){                       // fast path: blit static + marker
+  if(!leftCache){ renderLeft(); return; }
+  const {ctx,w,h}=fitDPR(surf); ctx.clearRect(0,0,w,h);
+  ctx.drawImage(leftCache,0,0,w,h);
+  drawTimeMarkerLeft(ctx);
+}
+function drawFloor(ctx){
+  const G=mesh.G;
+  // V̇-tinted floor quads (all coplanar at w=0 → no depth sort needed)
+  for(let i=0;i<G-1;i++)for(let j=0;j<G-1;j++){
+    const vd=0.25*(mesh.Vd[i*G+j]+mesh.Vd[(i+1)*G+j]+mesh.Vd[i*G+j+1]+mesh.Vd[(i+1)*G+j+1]);
+    const a=proj(uOf(gX1(i)),vOf(gX2(j)),0), b=proj(uOf(gX1(i+1)),vOf(gX2(j)),0),
+          c=proj(uOf(gX1(i+1)),vOf(gX2(j+1)),0), d=proj(uOf(gX1(i)),vOf(gX2(j+1)),0);
+    ctx.fillStyle=vdColor(vd,0.5);
+    ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.lineTo(c[0],c[1]);ctx.lineTo(d[0],d[1]);ctx.closePath();ctx.fill();
+  }
+  // floor grid lines
+  const sx=niceStep(view.x1max-view.x1min,6), sy=niceStep(view.x2max-view.x2min,6);
+  ctx.strokeStyle='rgba(138,166,198,.14)';ctx.lineWidth=1;
+  for(let x=Math.ceil(view.x1min/sx)*sx;x<=view.x1max+1e-9;x+=sx){
+    const p0=proj(uOf(x),vOf(view.x2min),0),p1=proj(uOf(x),vOf(view.x2max),0);
+    ctx.beginPath();ctx.moveTo(p0[0],p0[1]);ctx.lineTo(p1[0],p1[1]);ctx.stroke();}
+  for(let y=Math.ceil(view.x2min/sy)*sy;y<=view.x2max+1e-9;y+=sy){
+    const p0=proj(uOf(view.x1min),vOf(y),0),p1=proj(uOf(view.x1max),vOf(y),0);
+    ctx.beginPath();ctx.moveTo(p0[0],p0[1]);ctx.lineTo(p1[0],p1[1]);ctx.stroke();}
+  // floor border
+  ctx.strokeStyle='rgba(138,166,198,.35)';ctx.lineWidth=1.1;
+  const b=[proj(-1,-1,0),proj(1,-1,0),proj(1,1,0),proj(-1,1,0)];
+  ctx.beginPath();ctx.moveTo(b[0][0],b[0][1]);for(let k=1;k<4;k++)ctx.lineTo(b[k][0],b[k][1]);ctx.closePath();ctx.stroke();
+}
+function drawField(ctx){
+  const nx=clamp(Math.round(mesh?18:0),8,22), ny=18;
+  const dX=(view.x1max-view.x1min), dY=(view.x2max-view.x2min);
+  const arr=[],mags=[];
+  for(let i=0;i<nx;i++)for(let j=0;j<ny;j++){
+    const x1=view.x1min+(i+0.5)*dX/nx, x2=view.x2min+(j+0.5)*dY/ny; let v;
+    try{ v=Ffn(x1,x2,0); }catch(e){ continue; }
+    if(!isFinite(v[0])||!isFinite(v[1])) continue;
+    const mag=Math.hypot(v[0],v[1]); arr.push({x1,x2,f1:v[0],f2:v[1],mag}); mags.push(mag);
+  }
+  if(!arr.length) return;
+  mags.sort((a,b)=>a-b); const scale=mags[Math.floor(0.9*mags.length)]||1e-9;
+  const stepData=Math.min(dX/nx,dY/ny);
+  for(const a of arr){
+    if(a.mag<1e-9) continue;
+    const ux=a.f1/a.mag, uy=a.f2/a.mag, len=Math.min(a.mag/scale,1.3)*stepData*0.9;
+    const p0=proj(uOf(a.x1-ux*len*0.5),vOf(a.x2-uy*len*0.5),0);
+    const p1=proj(uOf(a.x1+ux*len*0.5),vOf(a.x2+uy*len*0.5),0);
+    const r=clamp(a.mag/scale,0,1);
+    ctx.strokeStyle=`rgba(${Math.round(150+80*r)},${Math.round(180+20*r)},${Math.round(220-40*r)},${0.5+0.4*r})`;
+    ctx.lineWidth=1.2; ctx.beginPath();ctx.moveTo(p0[0],p0[1]);ctx.lineTo(p1[0],p1[1]);ctx.stroke();
+    const ang=Math.atan2(p1[1]-p0[1],p1[0]-p0[0]), hl=5;
+    ctx.beginPath();ctx.moveTo(p1[0],p1[1]);ctx.lineTo(p1[0]-hl*Math.cos(ang-0.42),p1[1]-hl*Math.sin(ang-0.42));
+    ctx.moveTo(p1[0],p1[1]);ctx.lineTo(p1[0]-hl*Math.cos(ang+0.42),p1[1]-hl*Math.sin(ang+0.42));ctx.stroke();
+  }
+}
+function drawSurface(ctx){
+  const G=mesh.G, PX=new Float64Array(G*G),PY=new Float64Array(G*G),PD=new Float64Array(G*G);
+  for(let i=0;i<G;i++)for(let j=0;j<G;j++){ const p=proj(uOf(gX1(i)),vOf(gX2(j)),heightOf(mesh.V[i*G+j]));
+    const k=i*G+j; PX[k]=p[0];PY[k]=p[1];PD[k]=p[2]; }
+  const quads=[];
+  for(let i=0;i<G-1;i++)for(let j=0;j<G-1;j++){
+    const a=i*G+j,b=(i+1)*G+j,c=(i+1)*G+j+1,d=i*G+j+1;
+    const vd=0.25*(mesh.Vd[a]+mesh.Vd[b]+mesh.Vd[c]+mesh.Vd[d]);
+    // light shading from screen-space normal
+    const nx=(PX[b]-PX[a])*(PY[d]-PY[a])-(PY[b]-PY[a])*(PX[d]-PX[a]);
+    const shade=0.55+0.45*clamp(Math.abs(nx)/6000,0,1);
+    quads.push({d:(PD[a]+PD[b]+PD[c]+PD[d])*0.25, xs:[PX[a],PX[b],PX[c],PX[d]], ys:[PY[a],PY[b],PY[c],PY[d]], vd, shade});
+  }
+  quads.sort((p,q)=>q.d-p.d);   // far → near (back-to-front for alpha)
+  ctx.lineJoin='round';
+  for(const Q of quads){
+    ctx.beginPath();ctx.moveTo(Q.xs[0],Q.ys[0]);for(let k=1;k<4;k++)ctx.lineTo(Q.xs[k],Q.ys[k]);ctx.closePath();
+    ctx.fillStyle=vdColor(Q.vd,0.62*Q.shade); ctx.fill();
+    ctx.strokeStyle='rgba(10,20,34,.22)';ctx.lineWidth=0.5;ctx.stroke();
+  }
+}
+function projTraj(pts,onSurface){
+  const out=[]; for(const p of pts){ if(!isFinite(p.x1)||!isFinite(p.x2))break;
+    out.push(proj(uOf(p.x1),vOf(p.x2), onSurface?heightOf(p.V):0)); } return out;
+}
+function drawFloorTrace(ctx,tr,alpha){
+  const P=projTraj(tr.pts,false); if(P.length<2)return;
+  ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle=tr.color;ctx.lineWidth=1.4;ctx.setLineDash([4,3]);
+  ctx.beginPath();ctx.moveTo(P[0][0],P[0][1]);for(let i=1;i<P.length;i++)ctx.lineTo(P[i][0],P[i][1]);ctx.stroke();
+  ctx.restore();
+}
+function drawSurfaceTrace(ctx,tr){
+  const P=projTraj(tr.pts,true); if(P.length<2)return;
+  ctx.save();ctx.strokeStyle='#0a1526';ctx.lineWidth=4;ctx.lineJoin='round';
+  ctx.beginPath();ctx.moveTo(P[0][0],P[0][1]);for(let i=1;i<P.length;i++)ctx.lineTo(P[i][0],P[i][1]);ctx.stroke();
+  ctx.strokeStyle=tr.color;ctx.lineWidth=2.4;
+  ctx.beginPath();ctx.moveTo(P[0][0],P[0][1]);for(let i=1;i<P.length;i++)ctx.lineTo(P[i][0],P[i][1]);ctx.stroke();
+  ctx.restore();
+}
+function drawEquilibrium(ctx){
+  if(0<view.x1min||0>view.x1max||0<view.x2min||0>view.x2max) return;
+  const b=proj(uOf(0),vOf(0),0), tp=proj(uOf(0),vOf(0),heightOf(Vfn(0,0)));
+  ctx.strokeStyle='rgba(234,241,251,.5)';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(b[0],b[1]);ctx.lineTo(tp[0],tp[1]);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#EAF1FB';ctx.beginPath();ctx.arc(b[0],b[1],3.5,0,7);ctx.fill();
+}
+function drawIC(ctx){
+  const p=proj(uOf(pendingIC.x1),vOf(pendingIC.x2),0);
+  ctx.save();ctx.strokeStyle='#fff';ctx.lineWidth=1.6;
+  ctx.beginPath();ctx.arc(p[0],p[1],6,0,7);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(p[0]-9,p[1]);ctx.lineTo(p[0]+9,p[1]);ctx.moveTo(p[0],p[1]-9);ctx.lineTo(p[0],p[1]+9);ctx.stroke();
+  ctx.restore();
+}
+function trajAt(tr,t){                              // interpolate {x1,x2,V,Vd} at time t
+  const pts=tr.pts; if(t<=0)return pts[0]; if(t>=tr.Tend)return pts[pts.length-1];
+  let lo=0,hi=pts.length-1; while(hi-lo>1){const m=(lo+hi)>>1; if(pts[m].t<t)lo=m; else hi=m;}
+  const a=pts[lo],b=pts[hi],f=(t-a.t)/((b.t-a.t)||1);
+  return {t, x1:a.x1+(b.x1-a.x1)*f, x2:a.x2+(b.x2-a.x2)*f, V:a.V+(b.V-a.V)*f, Vd:a.Vd+(b.Vd-a.Vd)*f};
+}
+function drawTimeMarkerLeft(ctx){
+  if(!active) return;
+  const s=trajAt(active,tCursor);
+  const fl=proj(uOf(s.x1),vOf(s.x2),0), su=proj(uOf(s.x1),vOf(s.x2),heightOf(s.V));
+  ctx.strokeStyle='rgba(234,241,251,.55)';ctx.lineWidth=1;ctx.setLineDash([2,3]);
+  ctx.beginPath();ctx.moveTo(fl[0],fl[1]);ctx.lineTo(su[0],su[1]);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='rgba(234,241,251,.5)';ctx.beginPath();ctx.arc(fl[0],fl[1],3,0,7);ctx.fill();
+  ctx.save();ctx.shadowColor='#fff';ctx.shadowBlur=12;ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.arc(su[0],su[1],5.5,0,7);ctx.fill();ctx.shadowBlur=0;
+  ctx.lineWidth=2;ctx.strokeStyle=active.color;ctx.beginPath();ctx.arc(su[0],su[1],5.5,0,7);ctx.stroke();ctx.restore();
+}
+function drawAxes(ctx){
+  ctx.fillStyle='rgba(234,241,251,.8)';ctx.font='11px ui-monospace,monospace';
+  const lx=proj(1.14,0,0), ly=proj(0,1.14,0), lz=proj(-1,-1,mesh.capR*mesh.HZ+0.1);
+  ctx.fillText('x₁',lx[0]-4,lx[1]+4); ctx.fillText('x₂',ly[0]-4,ly[1]+4); ctx.fillText('V',lz[0]-4,lz[1]);
+}
+/* ================================================================
+   8. RENDER — RIGHT PLOT  V(x(t))  with the V̇ tangent
+   ================================================================ */
+function trajAtActive(){ return active?trajAt(active,tCursor):null; }
+function renderRight(){
+  const {ctx,w,h}=fitDPR(el('vt'));
+  const pL=52,pR=16,pT=14,pB=28,W=w-pL-pR,H=h-pT-pB;
+  ctx.clearRect(0,0,w,h);
+  const axisT=Math.max(T,active?active.Tend:0,1e-6);
+  let lo=Infinity,hi=-Infinity;
+  for(const tr of traces)for(const p of tr.pts){ if(isFinite(p.V)){lo=Math.min(lo,p.V);hi=Math.max(hi,p.V);} }
+  if(!isFinite(lo)){lo=0;hi=1;}
+  lo=Math.min(lo,0); const mg=(hi-lo)*0.1||0.5; hi+=mg; if(lo<0)lo-=mg*0.5;
+  const X=t=>pL+t/axisT*W, Y=v=>pT+(1-(v-lo)/(hi-lo))*H;
+  ctx.font='10px ui-monospace,monospace';
+  const sy=niceStep(hi-lo,5);
+  for(let y=Math.ceil(lo/sy)*sy;y<=hi+1e-9;y+=sy){ const yy=Y(y);
+    ctx.strokeStyle=Math.abs(y)<1e-9?'rgba(138,166,198,.4)':'rgba(138,166,198,.12)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(pL,yy);ctx.lineTo(pL+W,yy);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)';ctx.fillText(fmtTick(y),4,yy+3); }
+  const sx=niceStep(axisT,6);
+  for(let x=0;x<=axisT+1e-9;x+=sx){ const xx=X(x);
+    ctx.strokeStyle='rgba(138,166,198,.12)';ctx.beginPath();ctx.moveTo(xx,pT);ctx.lineTo(xx,pT+H);ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.6)';ctx.fillText(fmtTick(x),xx+2,pT+H+16); }
+  ctx.fillStyle='rgba(138,166,198,.8)';ctx.fillText('t (s)',pL+W-30,pT+H+16); ctx.fillText('V',6,pT+10);
+  ctx.save();ctx.beginPath();ctx.rect(pL,pT,W,H);ctx.clip();
+  for(const tr of traces){ const isA=tr===active;
+    ctx.strokeStyle=tr.color;ctx.globalAlpha=isA?1:0.28;ctx.lineWidth=isA?2.2:1.4;ctx.lineJoin='round';ctx.beginPath();
+    let st=false; for(const p of tr.pts){ if(!isFinite(p.V))break; const x=X(p.t),y=Y(p.V); st?ctx.lineTo(x,y):ctx.moveTo(x,y); st=true; }
+    ctx.stroke(); }
+  ctx.globalAlpha=1;
+  if(active){ const s=trajAt(active,tCursor), cx=X(s.t), cy=Y(s.V);
+    ctx.setLineDash([4,4]);ctx.strokeStyle='rgba(234,241,251,.6)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(cx,pT);ctx.lineTo(cx,pT+H);ctx.stroke();ctx.setLineDash([]);
+    const dt=axisT*0.07, t0=s.t-dt,t1=s.t+dt, v0=s.V-s.Vd*dt, v1=s.V+s.Vd*dt;
+    ctx.strokeStyle=s.Vd<=1e-9?'#5BD6A0':'#FF6B6B';ctx.lineWidth=2.6;
+    ctx.beginPath();ctx.moveTo(X(t0),Y(v0));ctx.lineTo(X(t1),Y(v1));ctx.stroke();
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(cx,cy,4,0,7);ctx.fill();
+    ctx.restore();
+    ctx.fillStyle=s.Vd<=1e-9?'#5BD6A0':'#FF6B6B';ctx.font='11px ui-monospace,monospace';
+    ctx.fillText('V̇ = '+fmt2(s.Vd), clamp(X(t1)+6,pL,pL+W-72), clamp(Y(v1)-6,pT+11,pT+H-2));
+  } else ctx.restore();
+}
+
+/* ================================================================
+   9. LYAPUNOV VERDICT  (equilibrium assumed at the origin)
+   ================================================================ */
+function setCond(id,ok){ const e=el(id); e.classList.toggle('ok',ok); e.classList.toggle('no',!ok); }
+function computeVerdict(){
+  const box=el('verdict'); if(!Vfn||!Ffn) return;
+  const f0=Ffn(0,0,0), eqOK=isFinite(f0[0])&&isFinite(f0[1])&&Math.hypot(f0[0],f0[1])<1e-4;
+  const V0=Vfn(0,0), sc=mesh?mesh.scale:1, v0OK=Math.abs(V0)<1e-4*Math.max(1,sc);
+  const R=0.15*Math.min(view.x1max-view.x1min,view.x2max-view.x2min);
+  let vpos=true, vdneg=true;
+  for(const r of [R*0.35,R*0.7,R]) for(let k=0;k<16;k++){ const th=k/16*2*Math.PI, x1=r*Math.cos(th), x2=r*Math.sin(th);
+    const v=Vfn(x1,x2), vd=Vdot(x1,x2,0);
+    if(!(v>V0+1e-9)) vpos=false;
+    if(isFinite(vd) && vd>1e-7*Math.max(1,vdScale)) vdneg=false;
+  }
+  setCond('cEq',eqOK); setCond('cV0',v0OK); setCond('cVpos',vpos); setCond('cVdot',vdneg);
+  const good=eqOK&&v0OK&&vpos&&vdneg;
+  box.className='verdict '+(good?'good':'bad');
+  el('vHead').textContent = !eqOK ? '⚠ origin is not an equilibrium (f(0)≠0)' :
+    good ? '✓ valid Lyapunov function near the origin' :
+    !v0OK ? 'V(0) ≠ 0' : !vpos ? 'V is not positive-definite here' : 'V̇ is not ≤ 0 here';
+}
+
+/* ================================================================
+   10. ORCHESTRATION + PLAYBACK
+   ================================================================ */
+function onModelChange(){
+  buildMesh();
+  if(mesh){ const a=[]; for(const v of mesh.Vd) if(isFinite(v)) a.push(Math.abs(v)); a.sort((x,y)=>x-y); vdScale=Math.max(quantile(a,0.85),1e-9); }
+  computeVerdict(); leftCache=null; renderLeft(); renderRight(); updateReadouts();
+}
+function updateReadouts(){
+  let s=null;
+  if(active) s=trajAt(active,tCursor);
+  else if(pendingIC&&Vfn){ try{ s={x1:pendingIC.x1,x2:pendingIC.x2,V:Vfn(pendingIC.x1,pendingIC.x2),Vd:Vdot(pendingIC.x1,pendingIC.x2,0),t:0}; }catch(e){} }
+  if(!s){ ['roX','roV','roVd','roT'].forEach(id=>el(id).textContent='—'); return; }
+  el('roX').textContent=`(${fmt2(s.x1)}, ${fmt2(s.x2)})`;
+  el('roV').textContent=fmt2(s.V); el('roVd').textContent=fmt2(s.Vd); el('roT').textContent=(s.t||0).toFixed(2);
+}
+function syncSlider(){ const sl=el('tslide'); if(active&&active.Tend>0){ const f=clamp(tCursor/active.Tend,0,1); sl.value=f; sl.style.setProperty('--fill',f*100+'%'); } }
+function paintFrame(){ paintLeftMarker(); renderRight(); updateReadouts(); syncSlider(); }
+function play(){ if(!active)return; if(tCursor>=active.Tend-1e-9)tCursor=0; playing=true; el('play').textContent='❚❚'; lastWall=performance.now(); requestAnimationFrame(playStep); }
+function pause(){ playing=false; el('play').textContent='▶'; }
+function playStep(now){
+  if(!playing||!active) return;
+  let dt=(now-lastWall)/1000; if(!(dt>0))dt=0; dt=Math.min(dt,0.05); lastWall=now;
+  const dur=clamp(active.Tend,2.5,9)/speedMul;
+  tCursor+=dt*active.Tend/dur;
+  if(tCursor>=active.Tend){ tCursor=active.Tend; paintFrame(); pause(); return; }
+  paintFrame(); requestAnimationFrame(playStep);
+}
+function run(){
+  if(!Ffn||!Vfn){ setErr('⚠ Build a valid system first'); return; }
+  if(!pendingIC){ el('vstatus').textContent='Click the floor or type x(0), then Run.'; return; }
+  const pts=integrate(pendingIC);
+  if(pts.length<2){ el('vstatus').textContent='Degenerate trajectory — try another point.'; return; }
+  const tr={pts,color:nextColor(),Tend:pts[pts.length-1].t};
+  traces.push(tr); active=tr; tCursor=0;
+  el('vstatus').textContent='Trace kept. Drag the time slider, or set a new x(0) and Run again.';
+  leftCache=null; renderLeft(); renderRight(); play();
+}
+
+/* ================================================================
+   11. INTERACTION
+   ================================================================ */
+function syncICFields(){ if(pendingIC){ el('ic1').value=+pendingIC.x1.toFixed(4); el('ic2').value=+pendingIC.x2.toFixed(4); } }
+function syncViewFields(){ el('x1min').value=view.x1min;el('x1max').value=view.x1max;el('x2min').value=view.x2min;el('x2max').value=view.x2max; }
+function readFields(){
+  const a=parseFloat(el('x1min').value),b=parseFloat(el('x1max').value),c=parseFloat(el('x2min').value),d=parseFloat(el('x2max').value);
+  if(isFinite(a)&&isFinite(b)&&b>a){view.x1min=a;view.x1max=b;} if(isFinite(c)&&isFinite(d)&&d>c){view.x2min=c;view.x2max=d;}
+  const T2=parseFloat(el('dur').value); if(isFinite(T2)&&T2>0)T=clamp(T2,0.5,1000);
+  onModelChange();
+}
+['x1min','x1max','x2min','x2max','dur'].forEach(id=>el(id).addEventListener('change',readFields));
+['ic1','ic2'].forEach(id=>el(id).addEventListener('change',()=>{ const a=parseFloat(el('ic1').value),b=parseFloat(el('ic2').value);
+  if(!isFinite(a)||!isFinite(b))return; pendingIC={x1:a,x2:b}; active=null; leftCache=null; renderLeft(); renderRight(); updateReadouts(); }));
+
+el('render').onclick=()=>{ if(compile()) onModelChange(); };
+[el('f1'),el('f2'),el('V')].forEach(inp=>inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ if(compile()) onModelChange(); }}));
+el('run').onclick=run;
+el('clear').onclick=()=>{ traces.length=0; active=null; colorIx=0; tCursor=0; pause(); leftCache=null; renderLeft(); renderRight(); updateReadouts(); el('vstatus').textContent='Traces cleared.'; };
+el('resetView').onclick=()=>{ view3d.zoom=1;view3d.panx=0;view3d.pany=0; Object.assign(view3d,VIEWS[curView]); leftCache=null; renderLeft(); };
+el('viewSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(b) setView(b.dataset.view); });
+
+// left plot: rotate / pan / zoom / click-to-set-IC
+(function(){ const cv=surf; let down=null;
+  cv.addEventListener('mousedown',e=>{ const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+    down={x,y,lx:x,ly:y,moved:false,mode:(e.shiftKey||e.button===1||e.button===2)?'pan':'rot'}; e.preventDefault(); });
+  window.addEventListener('mousemove',e=>{ if(!down)return; const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,dx=x-down.lx,dy=y-down.ly;
+    if(Math.hypot(x-down.x,y-down.y)>4)down.moved=true;
+    if(down.mode==='rot'){ view3d.az-=dx*0.008; view3d.el=clamp(view3d.el+dy*0.008,0.05,1.5563); }
+    else { view3d.panx+=dx; view3d.pany+=dy; }
+    down.lx=x;down.ly=y; leftCache=null; renderLeft(); });
+  window.addEventListener('mouseup',()=>{ if(!down)return;
+    if(!down.moved && mesh){
+      if(view3d.el>0.22){ const [u,v]=floorPick(down.x,down.y), x1=x1OfU(u), x2=x2OfV(v);
+        if(isFinite(x1)&&isFinite(x2)){ pendingIC={x1,x2}; active=null; syncICFields(); leftCache=null; renderLeft(); renderRight(); updateReadouts();
+          el('vstatus').textContent='Initial condition set — press Run ▶.'; } }
+      else el('sstatus').textContent='Switch to Iso or Overhead to click an initial condition.';
+    } down=null; });
+  cv.addEventListener('contextmenu',e=>e.preventDefault());
+  cv.addEventListener('wheel',e=>{ e.preventDefault(); view3d.zoom=clamp(view3d.zoom*(e.deltaY>0?1/1.1:1.1),0.3,4); leftCache=null; renderLeft(); },{passive:false});
+})();
+
+// time slider + drag-scrub on the V(t) plot
+el('tslide').addEventListener('input',()=>{ if(!active)return; pause(); const f=parseFloat(el('tslide').value);
+  tCursor=f*active.Tend; el('tslide').style.setProperty('--fill',f*100+'%'); paintLeftMarker(); renderRight(); updateReadouts(); });
+el('play').onclick=()=>{ if(!active)return; playing?pause():play(); };
+(function(){ const cv=el('vt'); let down=false;
+  const setFromX=px=>{ if(!active)return; const pL=52,pR=16,W=cv.clientWidth-pL-pR; const axisT=Math.max(T,active.Tend,1e-6);
+    tCursor=clamp((px-pL)/W*axisT,0,active.Tend); paintLeftMarker(); renderRight(); updateReadouts(); syncSlider(); };
+  cv.addEventListener('mousedown',e=>{ down=true; pause(); const r=cv.getBoundingClientRect(); setFromX(e.clientX-r.left); });
+  window.addEventListener('mousemove',e=>{ if(!down)return; const r=cv.getBoundingClientRect(); setFromX(e.clientX-r.left); });
+  window.addEventListener('mouseup',()=>{ down=false; });
+})();
+
+const spd=el('spd');
+function paintSpeed(){ speedMul=Math.pow(2,+spd.value); el('spdVal').textContent=(speedMul>=10?speedMul.toFixed(0):speedMul.toFixed(1))+'×';
+  spd.style.setProperty('--fill',(spd.value-spd.min)/(spd.max-spd.min)*100+'%'); }
+spd.addEventListener('input',paintSpeed);
+
+/* ================================================================
+   12. BOOT
+   ================================================================ */
+let rz=null; window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{leftCache=null;renderLeft();renderRight();},90);});
+compile(); syncViewFields(); syncICFields(); paintSpeed();
+onModelChange();
+</script>
+</body>
+</html>
