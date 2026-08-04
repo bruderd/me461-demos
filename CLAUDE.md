@@ -101,6 +101,16 @@ teaching artifact. The reference implementation is `demos/cruise-control/index.h
       View-toggle: iso / overhead (x-y) / x-V / y-V. RIGHT: V(x(t)) for all runs (latest tracked) with a
       draggable time slider + play, and a short tangent line whose slope = V̇. Live "valid Lyapunov function?"
       verdict at the origin (f(0)=0, V(0)=0, V>0 & V̇<0 on a small disk).
+- [x] Rocket Lander Challenge (`demos/rocket-lander/`) — a competitive project, NOT a single-file demo.
+      Students write a controller (JavaScript **or** Python/Pyodide) for a planar rocket booster (constant-mass
+      simplification of the CMU/Michigan/GT nonlinear-control rocket-landing project) that must fly from a fixed
+      battery of 10 escalating ICs to a soft, upright, on-pad landing. Two pages: `index.html` (briefing +
+      dynamics + scoring + live leaderboard + Get-Started) and `play.html` (workbench: follow-cam onboard view
+      with gimballing turret + thrust flame, fixed mission-map with superimposed per-trial traces, dual-language
+      editor with localStorage autosave + upload/download, precompute-then-animate playback with speed slider,
+      per-trial + total scoring, submit). Backend = `apps-script.gs` + `SETUP.md` (Google Apps Script Web App:
+      Sheet leaderboard upsert-by-email keep-best + sort, Google Doc code archive). `config.js` = single edit
+      point (leaderboardUrl, course, pyodideUrl). Live once pushed: `danielbruder.com/me461-demos/demos/rocket-lander/`.
 - [ ] DC motor (position/speed control; V→current→torque).
 - [ ] Inverted pendulum / cart-pole (stabilization; nonlinear, great for state feedback).
 - [ ] Ball & beam.
@@ -137,9 +147,74 @@ Keep all of them on the same skeleton so students recognize the interface across
 
 ---
 
-## Session resume notes (last updated 2026-07-30)
+## Session resume notes (last updated 2026-08-04)
 
 Where we left off, so the conversation can be cleared and resumed later.
+
+### Status: Rocket Lander Challenge is DONE + verified — NOT committed (NEWEST work).
+- Files: `demos/rocket-lander/{index.html, play.html, config.js, apps-script.gs, SETUP.md}` + a card in the
+  top-level `index.html` (after the Lyapunov card) + roadmap entry above. Standing rule unchanged (commit/push
+  only when asked; this project IS a git repo whose root is the working dir).
+- **This demo deliberately breaks the single-file / zero-dep convention** (two pages + a same-origin `config.js`
+  + a backend fetch + optional Pyodide CDN). Unavoidable given a leaderboard and Python support.
+
+**Design decisions the user chose** (multiple-choice, all recommended picks): controller language = **JS + Python**
+(Python via Pyodide); backend = **Google Apps Script**; rocket params = **I pick plausible values** (user did not
+have the MATLAB constants).
+
+**Physics (constant-mass simplification of the handout eq 1; γ folded so f_T is a force in N).** State
+`[y,z,θ,ψ,ẏ,ż,θ̇,ψ̇]`; inputs `u=[fT,τ]`, ψ is a *gimbal state* (`ψ̈=τ/J_T`). `ÿ=-(fT/m)sin(θ+ψ)`,
+`z̈=(fT/m)cos(θ+ψ)-g`, `θ̈=-(L/J)fT sinψ`. Chosen params: m=175, g=9.81, L=5, **J=mL²/3≈1458.33**, **J_T=40**
+(deliberately light → fast gimbal inner loop; started at 200 and the cascade limit-cycled — see gotcha),
+v_e=1000 (fuel=∫fT/v_e dt, tracked for scoring only), fT∈[0,6000] N, τ∈[±1000] N·m. RK4 @ 50 Hz (dt=0.02), T_max=60.
+Landing = ground crossing of `zbottom=z-L cosθ` (interpolated to the crossing for the scored state).
+
+**Scoring (exact handout cost).** P=[fuel,|y|,|zbottom|,|wrapπ(θ)|,√(ẏ²+ż²),|θ̇|], M=[150,20,10,π/6,5,1],
+α=[10,30,20,20,10,10]. J=0 if any i≥2 exceeds its M (blow-up); else Σα_i(M_i-|P_i|)/M_i, **clamped [0,100]** per
+trial (fuel P1 is NOT a hard limit — can cost points; clamp keeps a fuel-hog trial from going negative). Total over
+**10 fixed ICs** = max 1000. ICs are deterministic (`mulberry32(0x1234ABCD)`, difficulty ramp f=0.18→1 scaling
+each range) — same battery for everyone, increasing difficulty (higher altitude/tilt/spin).
+
+**Default controller (both languages)** = a cascaded PD: descent-rate profile `vzTarget=-clamp(0.8√zbottom,1.2,22)`
+→ thrust (gravity+tilt comp, floored at 0.25·mg for gimbal authority); horizontal error → target lean (only when
+|θ|<0.5); attitude → required `sinψ=-thddCmd·J/(L·fT)` → gimbal servo torque. **Verified score = 647.8/1000, lands
+7/10** (the 3 highest-altitude trials time out — intended “improve me” challenge). Faithful JS↔Python: the Python
+default reproduces 647.77 exactly.
+
+**Pyodide plumbing (don't re-break).** Pin **v314.0.3** — NB Pyodide adopted a new versioning scheme; `latest` on
+jsDelivr is genuinely 314.x, and `https://cdn.jsdelivr.net/pyodide/v314.0.3/full/` resolves (verified via the
+jsDelivr data API). Loaded lazily only when a student switches to Python; numpy auto-loaded if the code mentions it.
+Per step: `xPy=pyodide.toPy(stateObj)` (destroy each call), call `pyCtrl(xPy, pP, memPy, dt)`, unwrap return via
+`.toJs()` (tuple→Array / dict→Map) then destroy. **mem is a fresh Python dict per trial** (`startTrial()` makes a
+new `toPy({})`); `simulate()`'s own `mem={}` is ignored on the Python path. Precompute is async with a per-trial
+`await setTimeout` yield so the UI/progress stays alive.
+
+**Backend (Apps Script).** `doPost` upserts by lowercased email keeping the higher score, sorts the sheet, archives
+EVERY submission's code to a Google Doc (section per submission — note in SETUP on switching to real Docs *tabs*);
+`doGet` returns the sorted board as JSON with **emails withheld**. Front end POSTs `Content-Type:text/plain` on
+purpose (avoids the CORS preflight Apps Script can't answer). `LockService` guards concurrent writes. With
+`leaderboardUrl:""` everything still works: submit falls back to a per-browser `localStorage` board and the briefing
+page shows it with a “configure me” note. Honor-system caveat documented (client-side score; Doc archive = audit).
+
+**Answers to the user's 3 questions** (for the reply): Python — yes, done via Pyodide. Local persistence — yes,
+`localStorage` autosave per language + Upload/Download `.js`/`.py`. Google Sheet + Doc — yes, via the Apps Script
+Web App (they must deploy it once and paste the `/exec` URL into `config.js`; SETUP.md has the steps).
+
+**Verified this session** (scratchpad, reusable): `node --check` clean on both pages' scripts + `apps-script.gs`;
+**29/29 logic asserts** (`test.mjs` — hover/freefall/gimbal-sign derivatives, RK4 vs analytic freefall, zbottom
+geometry, all six scoring blow-ups + partial credit + θ=2π-wrap, IC-battery range/determinism, default lands ≥1 &
+scores >0). Headless-Chrome (Chrome.app `--headless=new`, probe injected inside the inline `<script>`, `--dump-dom`
++ `RESULT` div): **JS path** total 647.77 / trials match / 7 landed / both canvases non-blank / **no JS errors**;
+**Python path** (real Pyodide fetch, `--virtual-time-budget` waits on pending network) reproduced **647.77** exactly,
+no explosions, no errors — proves the whole toPy/mem/return-unwrap chain. Screenshots confirm: onboard rocket with
+gimballed nozzle + maize/orange flame + ground/pad follow-cam; mission map with all 10 colored traces spiraling to
+the pad; briefing page equations/params/scoring/leaderboard; top-level card in the grid.
+
+**Likely next steps (none in flight):** on request, deploy the Apps Script + set `config.js` `leaderboardUrl`, then
+commit/push. Optional polish: a live per-trial "running tally" reveal during playback (currently the full board is
+filled right after precompute); a Python starter that also handles the 3 high-altitude trials.
+
+
 
 ### Status: Lyapunov Function Explorer is DONE + verified — NOT committed (NEWEST work).
 - Files: `demos/lyapunov/index.html` (self-contained single file) and its landing-page card in `index.html`

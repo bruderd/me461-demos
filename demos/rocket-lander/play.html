@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MECHENG 461 · Rocket Lander — Controller</title>
+<script src="config.js"></script>
+<style>
+  :root{
+    --navy:#00274C; --navy-2:#0A1B33; --panel:#102A4C; --maize:#FFCB05;
+    --cyan:#57C7FF; --ink:#EAF1FB; --muted:#8AA6C6; --grid:rgba(138,166,198,.16);
+    --good:#5BD6A0; --bad:#FF6B6B; --flame:#FF9E3D;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--navy-2)}
+  body{background:linear-gradient(180deg,#0B1A30,#08111F 60%);color:var(--ink);font-family:var(--sans);
+       -webkit-font-smoothing:antialiased;padding:20px;min-height:100vh}
+  .wrap{max-width:1240px;margin:0 auto}
+  a{color:var(--maize)}
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+  header .tag{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--maize);
+              border:1px solid rgba(255,203,5,.35);padding:3px 8px;border-radius:4px}
+  h1{font-size:20px;font-weight:650;margin:0;letter-spacing:.01em}
+  header .sub{color:var(--muted);font-size:13px}
+  header .back{margin-left:auto;font-size:13px;text-decoration:none}
+  .card{background:linear-gradient(180deg,var(--panel),#0C2140);border:1px solid rgba(138,166,198,.16);
+        border-radius:12px;padding:14px}
+  .card h2{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+           color:var(--muted);margin:0 0 10px;font-weight:600}
+  .lc{text-transform:none}
+  canvas{display:block;width:100%;border-radius:8px}
+
+  .viz{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}
+  @media(max-width:900px){.viz{grid-template-columns:1fr}}
+  #onboard{background:linear-gradient(180deg,#0b1f3d,#0a1830);height:380px}
+  #map{background:linear-gradient(180deg,#0b1f3d,#0a1526);height:380px}
+
+  .readouts{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:14px}
+  @media(max-width:900px){.readouts{grid-template-columns:repeat(3,1fr)}}
+  .ro{background:#0A1D38;border:1px solid rgba(138,166,198,.14);border-radius:8px;padding:8px 10px}
+  .ro .k{font-family:var(--mono);font-size:10px;letter-spacing:.10em;color:var(--muted);text-transform:uppercase}
+  .ro .v{font-family:var(--mono);font-size:18px;font-weight:600;margin-top:2px;white-space:nowrap}
+  .ro .v small{font-size:11px;color:var(--muted);font-weight:400}
+
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
+  button{font-family:var(--sans);font-size:13px;font-weight:600;border:1px solid rgba(138,166,198,.25);
+    background:#122f52;color:var(--ink);padding:9px 15px;border-radius:8px;cursor:pointer;transition:.12s}
+  button:hover{background:#173a66}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.primary{background:var(--maize);color:#08213f;border-color:transparent}
+  button.primary:hover{filter:brightness(1.06)}
+  button.dirty{box-shadow:0 0 0 2px rgba(255,203,5,.5)}
+  .speed{display:flex;flex-direction:column;gap:2px;min-width:170px}
+  .speed .k{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .speed .k b{color:var(--maize)}
+  input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:3px;
+    background:linear-gradient(90deg,var(--maize) 0%,var(--maize) var(--fill,20%),#20406b var(--fill,20%));outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--ink);border:2px solid var(--maize);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--ink);border:2px solid var(--maize);cursor:pointer}
+  #progress{font-family:var(--mono);font-size:12px;color:var(--muted);min-height:16px}
+
+  .cols{display:grid;grid-template-columns:1.35fr 1fr;gap:16px;margin-top:16px}
+  @media(max-width:900px){.cols{grid-template-columns:1fr}}
+
+  /* editor */
+  .langtoggle{display:inline-flex;border:1px solid rgba(138,166,198,.25);border-radius:8px;overflow:hidden}
+  .langtoggle button{border:none;border-radius:0;background:#0e2647;padding:7px 14px}
+  .langtoggle button.on{background:var(--maize);color:#08213f}
+  .edtools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+  .edtools .sp{flex:1}
+  textarea#code{width:100%;height:340px;background:#08182f;color:#cfe3ff;border:1px solid rgba(138,166,198,.2);
+    border-radius:8px;padding:11px;font-family:var(--mono);font-size:12.5px;line-height:1.55;resize:vertical;tab-size:4;white-space:pre}
+  .hint{font-size:12px;color:var(--muted);line-height:1.55}
+  .hint code{font-family:var(--mono);background:#0a1d38;padding:1px 5px;border-radius:4px}
+  #err{font-family:var(--mono);font-size:12px;color:var(--bad);min-height:16px;margin-top:8px;white-space:pre-wrap}
+  #err.ok{color:var(--good)}
+
+  /* score table */
+  .scorewrap{overflow-x:auto}
+  table.score{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+  table.score th,table.score td{padding:5px 7px;text-align:right;border-bottom:1px solid rgba(138,166,198,.12)}
+  table.score th{color:var(--muted);font-weight:600;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+  table.score td:first-child,table.score th:first-child{text-align:left}
+  table.score tr.cur td{background:rgba(255,203,5,.08)}
+  table.score td .ok{color:var(--good)} table.score td .no{color:var(--bad)}
+  .total{display:flex;align-items:baseline;justify-content:space-between;margin-top:10px;
+         border-top:1px solid rgba(138,166,198,.25);padding-top:10px}
+  .total .lab{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  .total .val{font-family:var(--mono);font-size:26px;font-weight:700;color:var(--maize)}
+  .total .val small{font-size:14px;color:var(--muted);font-weight:400}
+
+  /* submit */
+  .submit .frow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .submit input[type=text],.submit input[type=email]{flex:1;min-width:180px;background:#08182f;color:var(--ink);
+    border:1px solid rgba(138,166,198,.25);border-radius:8px;padding:9px 11px;font-family:var(--sans);font-size:13px}
+  .submit input.bad{border-color:var(--bad)}
+  #subMsg{font-family:var(--mono);font-size:12px;min-height:16px;color:var(--muted);white-space:pre-wrap}
+  #subMsg.ok{color:var(--good)} #subMsg.bad{color:var(--bad)}
+  footer{color:var(--muted);font-size:12px;margin-top:20px;line-height:1.6}
+  footer code{font-family:var(--mono);background:#0a1d38;padding:1px 5px;border-radius:4px}
+  .badge{font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:20px;background:rgba(87,199,255,.14);color:var(--cyan)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="tag" id="courseTag">MECHENG&nbsp;461</span>
+    <h1>Rocket Lander — Controller Workbench</h1>
+    <span class="sub">write a controller, test it on the trial battery, submit your score</span>
+    <a class="back" href="index.html">← briefing &amp; leaderboard</a>
+  </header>
+
+  <!-- VISUALIZATION -->
+  <div class="viz">
+    <div class="card">
+      <h2>Onboard view · <span class="lc">trial <span id="trialLbl">—</span> / 10</span> <span class="badge" id="statusBadge">idle</span></h2>
+      <canvas id="onboard" height="380"></canvas>
+    </div>
+    <div class="card">
+      <h2>Mission map · <span class="lc">all trajectories (landing pad at y = 0)</span></h2>
+      <canvas id="map" height="380"></canvas>
+    </div>
+  </div>
+
+  <div class="readouts">
+    <div class="ro"><div class="k">time</div><div class="v"><span id="roT">0.0</span><small> s</small></div></div>
+    <div class="ro"><div class="k lc">y · z<sub>bottom</sub></div><div class="v"><span id="roPos">0, 0</span><small> m</small></div></div>
+    <div class="ro"><div class="k lc">θ (tilt)</div><div class="v"><span id="roTh">0</span><small>°</small></div></div>
+    <div class="ro"><div class="k">speed</div><div class="v"><span id="roV">0.0</span><small> m/s</small></div></div>
+    <div class="ro"><div class="k lc">thrust f<sub>T</sub></div><div class="v"><span id="roFt">0</span><small> N</small></div></div>
+    <div class="ro"><div class="k">fuel used</div><div class="v"><span id="roFuel">0</span><small> kg</small></div></div>
+  </div>
+
+  <div class="bar">
+    <button id="run" class="primary">▶ Test controller</button>
+    <button id="playpause" disabled>❚❚ Pause</button>
+    <button id="restart" disabled>⟲ Replay</button>
+    <div class="speed">
+      <span class="k">Playback speed <b id="spdVal">1.0×</b></span>
+      <input id="speed" type="range" min="-1" max="4" step="0.05" value="0">
+    </div>
+    <span id="progress"></span>
+  </div>
+
+  <!-- EDITOR + SCORES -->
+  <div class="cols">
+    <div class="card">
+      <h2>Your controller</h2>
+      <div class="edtools">
+        <span class="langtoggle"><button id="langJs" class="on">JavaScript</button><button id="langPy">Python</button></span>
+        <span class="sp"></span>
+        <button id="upload">⬆ Upload</button>
+        <button id="download">⬇ Download</button>
+        <button id="revert">↺ Default</button>
+        <input id="file" type="file" accept=".js,.py,.txt" style="display:none">
+      </div>
+      <textarea id="code" spellcheck="false"></textarea>
+      <div class="hint" id="apiHint"></div>
+      <div id="err"></div>
+    </div>
+
+    <div class="card">
+      <h2>Scoreboard · <span class="lc">10 trials, max 100 each</span></h2>
+      <div class="scorewrap">
+        <table class="score" id="scoreTable">
+          <thead><tr><th>#</th><th>land</th><th>|y|</th><th>θ°</th><th>v</th><th>ω</th><th>fuel</th><th>score</th></tr></thead>
+          <tbody id="scoreBody"></tbody>
+        </table>
+      </div>
+      <div class="total"><span class="lab">Total score</span>
+        <span class="val"><span id="totalVal">—</span><small> / 1000</small></span></div>
+
+      <div class="submit" style="margin-top:16px">
+        <h2>Submit to leaderboard</h2>
+        <div class="frow">
+          <input id="subName" type="text" placeholder="Full name" autocomplete="name">
+          <input id="subEmail" type="email" placeholder="uniqname@umich.edu" autocomplete="email">
+        </div>
+        <div class="bar" style="margin-top:0">
+          <button id="submit" disabled>Submit score</button>
+          <span id="subMsg"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <strong>The plant.</strong>&nbsp; Planar rocket booster, state
+    <code>[y, z, θ, ψ, ẏ, ż, θ̇, ψ̇]</code>, constant mass. You command thrust
+    <code>f<sub>T</sub></code> (0…<span id="fFtmax"></span>&nbsp;N) and gimbal torque
+    <code>τ</code> (±<span id="fTaumax"></span>&nbsp;N·m); the gimbal angle <code>ψ</code> is a state you steer.
+    Dynamics integrated with fixed-step RK4 at 50&nbsp;Hz. Full state is available to your controller.
+    Everything runs in your browser — Python via Pyodide (WebAssembly) is fetched only if you switch languages.
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ============================================================================
+   CONFIG
+   ============================================================================ */
+const CFG = (window.ROCKET_CONFIG || {});
+const LEADERBOARD_URL = CFG.leaderboardUrl || "";
+const PYODIDE_URL = CFG.pyodideUrl || "https://cdn.jsdelivr.net/pyodide/v314.0.3/full/";
+if (CFG.course) { document.getElementById('courseTag').textContent = CFG.course; }
+
+/* ============================================================================
+   1. PHYSICS + SCORING CORE  (verified in Node; identical to core.mjs)
+   ============================================================================ */
+const PARAMS = (() => {
+  const p = { m:175, g:9.81, L:5, JT:40, ve:1000, fTmax:6000, tauMax:1000 };
+  p.J = p.m*p.L*p.L/3;              // ≈ 1458.33 kg·m²
+  return p;
+})();
+const g = PARAMS.g;
+const M     = [150, 20, 10, Math.PI/6, 5, 1];     // scoring limits
+const ALPHA = [10, 30, 20, 20, 10, 10];            // scoring weights
+const SIM_DT = 0.02, T_MAX = 60, N_TRIALS = 10;
+
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const wrapPi=a=>{a=(a+Math.PI)%(2*Math.PI); if(a<0)a+=2*Math.PI; return a-Math.PI;};
+const zbottom=x=>x[1]-PARAMS.L*Math.cos(x[2]);
+
+function deriv(x, fT, tau){
+  const {m,L,J,JT}=PARAMS;
+  const pt=x[3]+x[2], s=Math.sin(pt), c=Math.cos(pt);
+  return [x[4],x[5],x[6],x[7],
+    -(fT/m)*s, (fT/m)*c-g, -(L/J)*fT*Math.sin(x[3]), tau/JT];
+}
+function rk4(x, fT, tau, dt){
+  const add=(a,b,s)=>a.map((v,i)=>v+s*b[i]);
+  const k1=deriv(x,fT,tau), k2=deriv(add(x,k1,dt/2),fT,tau),
+        k3=deriv(add(x,k2,dt/2),fT,tau), k4=deriv(add(x,k3,dt),fT,tau);
+  return x.map((v,i)=>v+(dt/6)*(k1[i]+2*k2[i]+2*k3[i]+k4[i]));
+}
+function stateObj(x,t,fuel){
+  return {y:x[0],z:x[1],theta:x[2],psi:x[3],ydot:x[4],zdot:x[5],
+          thetadot:x[6],psidot:x[7],t,fuel,zbottom:zbottom(x)};
+}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function makeICs(N){
+  const rng=mulberry32(0x1234ABCD), ics=[], D=179*Math.PI/180;
+  for(let i=0;i<N;i++){
+    const f=0.18+0.82*(i/(N-1)), r=()=>2*rng()-1;
+    ics.push([r()*100*f, 25+rng()*(1500-25)*f, r()*D*f, 0, r()*10*f, r()*10*f, r()*D*f, 0]);
+  }
+  return ics;
+}
+const IC_BATTERY = makeICs(N_TRIALS);
+
+function scoreTrial(s, fuel){
+  const P=[fuel, Math.abs(s[0]), Math.abs(zbottom(s)), Math.abs(wrapPi(s[2])),
+           Math.hypot(s[4],s[5]), Math.abs(s[6])];
+  for(let i=1;i<6;i++) if(P[i]>M[i]) return {J:0,P,blew:true,reason:i};
+  let J=0; for(let i=0;i<6;i++) J+=ALPHA[i]*(M[i]-P[i])/M[i];
+  return {J:clamp(J,0,100),P,blew:false,reason:-1};
+}
+// simulate one trial. ctrl(stateObj, p, mem, dt) -> {fT,tau} | [fT,tau]
+function simulate(ctrl, ic){
+  const {fTmax,tauMax,ve}=PARAMS;
+  let x=ic.slice(), t=0, fuel=0; const mem={}, samples=[];
+  let landed=false, landState=x.slice(), landFuel=0, exploded=false, errMsg='';
+  const p={...PARAMS};
+  for(let step=0; t<T_MAX-1e-9; step++){
+    let fT=0,tau=0;
+    try{
+      const r=ctrl(stateObj(x,t,fuel),p,mem,SIM_DT);
+      if(Array.isArray(r)){fT=r[0];tau=r[1];}
+      else if(r&&typeof r==='object'){fT=r.fT;tau=r.tau;}
+    }catch(e){ exploded=true; errMsg=(e&&e.message)||String(e); break; }
+    if(!isFinite(fT))fT=0; if(!isFinite(tau))tau=0;
+    fT=clamp(fT,0,fTmax); tau=clamp(tau,-tauMax,tauMax);
+    samples.push([t,x[0],x[1],x[2],x[3],fT,tau,fuel]);
+    const zbPrev=zbottom(x), fuelPrev=fuel, xNext=rk4(x,fT,tau,SIM_DT);
+    fuel+=fT/ve*SIM_DT;
+    const zbNext=zbottom(xNext);
+    if(zbNext<=0){
+      const a=zbPrev/(zbPrev-zbNext);
+      landState=x.map((v,i)=>v+a*(xNext[i]-v));
+      landFuel=fuelPrev+a*(fuel-fuelPrev); t+=a*SIM_DT; landed=true;
+      samples.push([t,landState[0],landState[1],landState[2],landState[3],fT,tau,landFuel]);
+      break;
+    }
+    x=xNext; t+=SIM_DT;
+  }
+  if(!landed){landState=x.slice();landFuel=fuel;}
+  const sc = exploded ? {J:0,P:null,blew:true,reason:-2}
+                      : scoreTrial(landState,landFuel);
+  return {score:sc.J,detail:sc,landed,exploded,errMsg,tEnd:t,samples,landState,fuel:landFuel};
+}
+
+/* ============================================================================
+   2. DEFAULT CONTROLLERS
+   ============================================================================ */
+const DEFAULT_JS =
+`// ── Cascaded landing controller (a starting point — improve it!) ─────────
+//  x : { y, z, theta, psi, ydot, zdot, thetadot, psidot, t, fuel, zbottom }
+//  p : { m, g, L, J, JT, ve, fTmax, tauMax }
+//  mem : {} persists across steps      dt : timestep (s)
+//  return { fT, tau }  —  thrust (N, 0..fTmax) and gimbal torque (N·m)
+
+const C = Math.cos(x.theta);
+
+// 1) VERTICAL — track a descent-rate profile that eases off near the ground.
+//    Thrust keeps a floor so the gimbal always has torque authority.
+const vzTarget = -Math.max(1.2, Math.min(22, 0.8*Math.sqrt(Math.max(0, x.zbottom))));
+const azCmd = 1.6*(vzTarget - x.zdot);
+let fT = p.m*(p.g + azCmd) / Math.max(0.4, C);
+fT = Math.max(0.25*p.m*p.g, Math.min(p.fTmax, fT));
+
+// 2) HORIZONTAL — lean toward the pad (y=0), but ONLY once we're roughly
+//    upright; if we're tipped over, priority is getting vertical again.
+//    ÿ = -(fT/m)·sin(psi+theta) ⇒ a positive tilt drives -y.
+const upright = Math.abs(x.theta) < 0.5;               // within ~29°
+const thetaTarget = upright
+  ? Math.max(-0.22, Math.min(0.22, 0.012*x.y + 0.05*x.ydot))
+  : 0;
+
+// 3) ATTITUDE — pick the gimbal angle that makes the needed angular accel.
+//    theta_ddot = -(L/J)·fT·sin(psi) ⇒ sin(psi) = -theta_ddot·J/(L·fT)
+const thddCmd = 6*(thetaTarget - x.theta) - 5*x.thetadot;
+let sPsi = -thddCmd*p.J/(p.L*fT);
+sPsi = Math.max(-0.5, Math.min(0.5, sPsi));
+const psiTarget = Math.asin(sPsi);
+
+// 4) GIMBAL SERVO — torque to slew psi toward psiTarget (fast inner loop).
+let tau = p.JT*(60*(psiTarget - x.psi) - 16*x.psidot);
+
+return { fT, tau };`;
+
+const DEFAULT_PY =
+`import math
+
+def controller(x, p, mem, dt):
+    # x : dict with y, z, theta, psi, ydot, zdot, thetadot, psidot, t, fuel, zbottom
+    # p : dict with m, g, L, J, JT, ve, fTmax, tauMax
+    # mem : dict that persists across calls      dt : timestep (s)
+    # return (fT, tau)  --  thrust (N, 0..fTmax) and gimbal torque (N*m)
+    C = math.cos(x['theta'])
+
+    # 1) VERTICAL -- descent-rate profile that eases off near the ground.
+    vzTarget = -max(1.2, min(22, 0.8 * math.sqrt(max(0.0, x['zbottom']))))
+    azCmd = 1.6 * (vzTarget - x['zdot'])
+    fT = p['m'] * (p['g'] + azCmd) / max(0.4, C)
+    fT = max(0.25 * p['m'] * p['g'], min(p['fTmax'], fT))
+
+    # 2) HORIZONTAL -- lean toward the pad (y = 0), only once roughly upright.
+    upright = abs(x['theta']) < 0.5
+    thetaTarget = max(-0.22, min(0.22, 0.012 * x['y'] + 0.05 * x['ydot'])) if upright else 0.0
+
+    # 3) ATTITUDE -- gimbal angle that makes the needed angular accel.
+    thddCmd = 6 * (thetaTarget - x['theta']) - 5 * x['thetadot']
+    sPsi = -thddCmd * p['J'] / (p['L'] * fT)
+    sPsi = max(-0.5, min(0.5, sPsi))
+    psiTarget = math.asin(sPsi)
+
+    # 4) GIMBAL SERVO -- torque to slew psi toward psiTarget.
+    tau = p['JT'] * (60 * (psiTarget - x['psi']) - 16 * x['psidot'])
+
+    return (fT, tau)`;
+
+const API_HINT = {
+  js:`Return <code>{ fT, tau }</code> each step. <code>x</code> holds the full state (<code>y, z, theta, psi</code> and their dots, plus <code>t, fuel, zbottom</code>); <code>p</code> holds the constants; <code>mem</code> persists across steps. Anything goes — PID, LQR, MPC, gain-scheduling, switching. <code>fT</code> is auto-clamped to 0…${PARAMS.fTmax} N, <code>τ</code> to ±${PARAMS.tauMax} N·m.`,
+  py:`Define <code>def controller(x, p, mem, dt): …</code> returning <code>(fT, tau)</code>. <code>x</code> and <code>p</code> are dicts (<code>x['theta']</code> …); <code>mem</code> is a dict that persists across steps. <code>import math</code>, and <code>import numpy as np</code> is available (loaded on first run). Runs in-browser via Pyodide — the first Python test downloads it (~10 MB, once).`
+};
+
+/* ============================================================================
+   3. CONTROLLER COMPILATION  (JS direct, Python via Pyodide)
+   ============================================================================ */
+let lang='js';
+let pyodide=null, pyLoading=null;
+
+function compileJS(src){
+  const fn=new Function('x','p','mem','dt',src);
+  fn(stateObj([0,100,0,0,0,0,0,0],0,0),{...PARAMS},{},SIM_DT);   // smoke test
+  return fn;
+}
+
+function loadPyodideOnce(){
+  if(pyodide) return Promise.resolve(pyodide);
+  if(pyLoading) return pyLoading;
+  pyLoading=new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src=PYODIDE_URL+'pyodide.js';
+    s.onload=async()=>{
+      try{ pyodide=await window.loadPyodide({indexURL:PYODIDE_URL}); resolve(pyodide); }
+      catch(e){ reject(e); }
+    };
+    s.onerror=()=>reject(new Error('Failed to load Pyodide from '+PYODIDE_URL+' (need internet for the Python path).'));
+    document.head.appendChild(s);
+  });
+  return pyLoading;
+}
+
+// Build a synchronous JS-callable controller backed by the Python function.
+// Returns {fn, startTrial, dispose}. Mem is a fresh Python dict per trial.
+function makePyController(src){
+  pyodide.runPython(src);
+  const pyCtrl=pyodide.globals.get('controller');
+  if(!pyCtrl) throw new Error("Your code must define a function named 'controller'.");
+  const pP=pyodide.toPy({...PARAMS});
+  let memPy=null;
+  const toPair=(ret)=>{
+    if(ret==null) return [0,0];
+    if(ret.toJs){ const js=ret.toJs(); ret.destroy&&ret.destroy();
+      if(Array.isArray(js)) return [js[0],js[1]];
+      if(js instanceof Map) return [js.get('fT'),js.get('tau')];
+      return [js.fT,js.tau]; }
+    return [ret.fT??0, ret.tau??0];
+  };
+  return {
+    startTrial(){ if(memPy)memPy.destroy(); memPy=pyodide.toPy({}); },
+    fn(s){ const xPy=pyodide.toPy(s); let r;
+           try{ r=pyCtrl(xPy,pP,memPy,SIM_DT); } finally { xPy.destroy(); }
+           return toPair(r); },
+    dispose(){ try{if(memPy)memPy.destroy();pP.destroy();pyCtrl.destroy();}catch(e){} }
+  };
+}
+
+/* ============================================================================
+   4. RUN THE BATTERY  (precompute all trials, then animate)
+   ============================================================================ */
+let results=null, tested=false, dirty=true;
+const progressEl=document.getElementById('progress');
+function setProgress(m){progressEl.textContent=m;}
+function setErr(m,ok){const e=document.getElementById('err');e.textContent=m;e.className=ok?'ok':'';}
+
+async function runBattery(){
+  setErr('');
+  const src=codeEl.value;
+  results=null; tested=false; updateButtons();
+  try{
+    if(lang==='js'){
+      const fn=compileJS(src);
+      setErr('✓ compiled',true);
+      results=[];
+      for(let i=0;i<N_TRIALS;i++){
+        results.push(simulate(fn,IC_BATTERY[i]));
+        setProgress(`simulating trial ${i+1}/${N_TRIALS}…`);
+        if(i%3===0) await new Promise(r=>setTimeout(r));   // keep UI alive
+      }
+    } else {
+      setProgress('loading Python (Pyodide)…');
+      await loadPyodideOnce();
+      if(/(^|[^\w])(import\s+numpy|numpy|np\.)/.test(src)){
+        setProgress('loading numpy…'); await pyodide.loadPackage('numpy');
+      }
+      let pc;
+      try{ pc=makePyController(src); }
+      catch(e){ setErr('⚠ '+(e.message||e)); setProgress(''); updateButtons(); return; }
+      setErr('✓ compiled',true);
+      results=[];
+      for(let i=0;i<N_TRIALS;i++){
+        pc.startTrial();
+        results.push(simulate((s)=>pc.fn(s),IC_BATTERY[i]));
+        setProgress(`simulating trial ${i+1}/${N_TRIALS}…`);
+        await new Promise(r=>setTimeout(r));
+      }
+      pc.dispose();
+    }
+  }catch(e){ setErr('⚠ '+(e.message||e)); setProgress(''); updateButtons(); return; }
+
+  // any runtime explosion inside a trial?
+  const boom=results.find(r=>r.exploded);
+  if(boom) setErr('⚠ runtime error in your controller: '+boom.errMsg);
+
+  tested=true; dirty=false;
+  fillScores();
+  setProgress('done — '+results.filter(r=>r.landed&&!r.exploded).length+'/'+N_TRIALS+' landed');
+  setupMapBounds();
+  startPlayback();
+  updateButtons();
+}
+
+/* ============================================================================
+   5. SCOREBOARD
+   ============================================================================ */
+const scoreBody=document.getElementById('scoreBody');
+function fillScores(){
+  scoreBody.innerHTML='';
+  let total=0;
+  results.forEach((r,i)=>{
+    total+=r.score;
+    const P=r.detail.P;
+    const tr=document.createElement('tr'); tr.id='row'+i;
+    const land=r.exploded?'<span class="no">err</span>'
+              :(r.landed?(r.score>0?'<span class="ok">✓</span>':'<span class="no">✗</span>')
+                        :'<span class="no">timeout</span>');
+    const cell=(v)=>P?v:'—';
+    tr.innerHTML=`<td>${i+1}</td><td>${land}</td>`+
+      `<td>${cell(P?P[1].toFixed(1):0)}</td>`+
+      `<td>${cell(P?(P[3]*180/Math.PI).toFixed(0):0)}</td>`+
+      `<td>${cell(P?P[4].toFixed(1):0)}</td>`+
+      `<td>${cell(P?P[5].toFixed(2):0)}</td>`+
+      `<td>${cell(P?P[0].toFixed(0):0)}</td>`+
+      `<td><b>${r.score.toFixed(1)}</b></td>`;
+    scoreBody.appendChild(tr);
+  });
+  document.getElementById('totalVal').textContent=total.toFixed(1);
+  window.__total=total;
+}
+function highlightRow(i){
+  document.querySelectorAll('table.score tr.cur').forEach(t=>t.classList.remove('cur'));
+  const r=document.getElementById('row'+i); if(r)r.classList.add('cur');
+}
+
+/* ============================================================================
+   6. RENDERING
+   ============================================================================ */
+const onboard=document.getElementById('onboard'), mapc=document.getElementById('map');
+function fitDPR(cv){
+  const dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight;
+  cv.width=w*dpr; cv.height=h*dpr;
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx,w,h};
+}
+const TERM_COLORS=['#FFCB05','#57C7FF','#5BD6A0','#FF6B6B','#C98BFF','#FF9E3D','#7FE0D0','#FF7BAC','#9AD24B','#5C8BFF'];
+// canvas can't read CSS custom properties — keep literal copies here
+const var_maize='#FFCB05', var_navy2='#0A1B33', var_good='#5BD6A0', var_bad='#FF6B6B';
+
+// ---- onboard follow-cam ----
+function drawOnboard(sample){
+  const {ctx,w,h}=fitDPR(onboard);
+  ctx.clearRect(0,0,w,h);
+  if(!sample){ ctx.fillStyle='rgba(138,166,198,.5)'; ctx.font='13px var(--mono)';
+    ctx.fillText('Press “Test controller” to fly the battery.',16,26); return; }
+  const [t,y,z,theta,psi,fT]=sample;
+  const spanY=42, ppm=h/spanY;                       // metres shown vertically
+  const sx=wy=>w/2+(wy-y)*ppm, sy=wz=>h/2-(wz-z)*ppm;
+  const Lpx=PARAMS.L*ppm;
+
+  // ground + pad, if within view
+  const zg=sy(0);
+  if(zg< h+80){
+    const grd=ctx.createLinearGradient(0,zg,0,h); grd.addColorStop(0,'#123a2a'); grd.addColorStop(1,'#0a1f16');
+    ctx.fillStyle=grd; ctx.fillRect(0,Math.max(0,zg),w,h-Math.max(0,zg));
+    ctx.strokeStyle='#2f6b48'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(0,zg); ctx.lineTo(w,zg); ctx.stroke();
+    // landing pad y∈[-20,20]
+    ctx.strokeStyle=var_maize; ctx.lineWidth=4; ctx.beginPath();
+    ctx.moveTo(sx(-20),zg); ctx.lineTo(sx(20),zg); ctx.stroke();
+    ctx.setLineDash([4,4]); ctx.strokeStyle='rgba(255,203,5,.5)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(sx(0),zg); ctx.lineTo(sx(0),zg-14); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // altitude / vy tape
+  ctx.fillStyle='rgba(234,241,251,.85)'; ctx.font='600 12px ui-monospace,monospace';
+  ctx.fillText('alt '+zbottom([y,z,theta,psi]).toFixed(1)+' m', 12, 20);
+
+  // rocket
+  ctx.save();
+  ctx.translate(sx(y),sy(z));
+  ctx.rotate(-theta);
+  const bw=0.9*ppm;                                  // half-width in px
+  // body
+  const bodyGrad=ctx.createLinearGradient(-bw,0,bw,0);
+  bodyGrad.addColorStop(0,'#c9d6e6'); bodyGrad.addColorStop(.5,'#eef4fb'); bodyGrad.addColorStop(1,'#9fb0c6');
+  ctx.fillStyle=bodyGrad; ctx.strokeStyle='#33465e'; ctx.lineWidth=1;
+  ctx.beginPath();
+  ctx.moveTo(-bw,+Lpx*0.9);
+  ctx.lineTo(-bw,-Lpx*0.55);
+  ctx.quadraticCurveTo(-bw,-Lpx*1.0,0,-Lpx*1.0);     // nose cone
+  ctx.quadraticCurveTo(bw,-Lpx*1.0,bw,-Lpx*0.55);
+  ctx.lineTo(bw,+Lpx*0.9);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  // navy band + fins
+  ctx.fillStyle=var_navy2;
+  ctx.fillRect(-bw,-Lpx*0.15,2*bw,Lpx*0.28);
+  ctx.fillStyle='#7f93ad';
+  ctx.beginPath(); ctx.moveTo(-bw,+Lpx*0.55); ctx.lineTo(-bw-bw*0.9,+Lpx*0.95); ctx.lineTo(-bw,+Lpx*0.95); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(bw,+Lpx*0.55); ctx.lineTo(bw+bw*0.9,+Lpx*0.95); ctx.lineTo(bw,+Lpx*0.95); ctx.closePath(); ctx.fill();
+
+  // gimbal + flame at base
+  ctx.translate(0,+Lpx*0.9);
+  ctx.rotate(-psi);
+  ctx.fillStyle='#4a5b73';
+  ctx.beginPath(); ctx.moveTo(-bw*0.55,0); ctx.lineTo(bw*0.55,0); ctx.lineTo(bw*0.85,bw*0.7); ctx.lineTo(-bw*0.85,bw*0.7); ctx.closePath(); ctx.fill();
+  const frac=clamp(fT/PARAMS.fTmax,0,1);
+  if(frac>0.01){
+    const fl=(0.6+frac*5.2)*ppm*(0.85+0.3*Math.random());
+    const fw=bw*(0.55+0.5*frac);
+    const fg=ctx.createLinearGradient(0,bw*0.7,0,bw*0.7+fl);
+    fg.addColorStop(0,'#FFF3C4'); fg.addColorStop(.35,var_maize); fg.addColorStop(.7,'#FF7A1A'); fg.addColorStop(1,'rgba(255,80,0,0)');
+    ctx.fillStyle=fg;
+    ctx.beginPath(); ctx.moveTo(-fw,bw*0.7); ctx.quadraticCurveTo(0,bw*0.7+fl*0.5,0,bw*0.7+fl);
+    ctx.quadraticCurveTo(0,bw*0.7+fl*0.5,fw,bw*0.7); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ---- mission map (fixed frame, all traces superimposed) ----
+let mapBounds=null;
+function setupMapBounds(){
+  let ymin=-25,ymax=25,zmax=30;
+  for(const r of results) for(const s of r.samples){
+    ymin=Math.min(ymin,s[1]); ymax=Math.max(ymax,s[1]); zmax=Math.max(zmax,s[2]);
+  }
+  const padY=(ymax-ymin)*0.08+6; ymin-=padY; ymax+=padY;
+  mapBounds={ymin,ymax,zmin:-zmax*0.04,zmax:zmax*1.06};
+}
+function drawTrace(ctx,X,Y,r,col,upto){
+  const s=r.samples; if(!s.length) return;
+  const n=Math.min(upto,s.length);
+  ctx.strokeStyle=col; ctx.globalAlpha=0.9; ctx.lineWidth=1.6; ctx.beginPath();
+  for(let k=0;k<n;k++){ const x=X(s[k][1]),y=Y(s[k][2]); k?ctx.lineTo(x,y):ctx.moveTo(x,y); }
+  ctx.stroke(); ctx.globalAlpha=1;
+  ctx.fillStyle=col; ctx.beginPath(); ctx.arc(X(s[0][1]),Y(s[0][2]),2.5,0,7); ctx.fill();
+  if(n>=s.length){                                   // landed → ring the touchdown point
+    const last=s[s.length-1], good=r.landed&&!r.exploded&&r.score>0;
+    ctx.strokeStyle=good?var_good:var_bad; ctx.lineWidth=2; ctx.beginPath();
+    ctx.arc(X(last[1]),Y(last[2]),4,0,7); ctx.stroke();
+  }
+}
+// Draw the whole map each frame: completed traces in full, the active trace up to curIdx.
+function drawMapFrame(curTrial,curIdx){
+  const {ctx,w,h}=fitDPR(mapc);
+  ctx.clearRect(0,0,w,h);
+  if(!mapBounds){ ctx.fillStyle='rgba(138,166,198,.5)'; ctx.font='13px ui-monospace,monospace';
+    ctx.fillText('Trajectories appear here after a test.',16,26); return; }
+  const {ymin,ymax,zmin,zmax}=mapBounds, padL=40,padR=14,padT=14,padB=26;
+  const X=wy=>padL+((wy-ymin)/(ymax-ymin))*(w-padL-padR);
+  const Y=wz=>padT+(1-(wz-zmin)/(zmax-zmin))*(h-padT-padB);
+  const yg=Y(0);
+  const grd=ctx.createLinearGradient(0,yg,0,h); grd.addColorStop(0,'#123a2a'); grd.addColorStop(1,'#0a1f16');
+  ctx.fillStyle=grd; ctx.fillRect(0,yg,w,h-yg);
+  ctx.strokeStyle='#2f6b48'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(0,yg); ctx.lineTo(w,yg); ctx.stroke();
+  ctx.strokeStyle=var_maize; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(X(-20),yg); ctx.lineTo(X(20),yg); ctx.stroke();
+  ctx.fillStyle=var_maize; ctx.beginPath(); ctx.moveTo(X(0),yg-11); ctx.lineTo(X(0)-6,yg); ctx.lineTo(X(0)+6,yg); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='rgba(138,166,198,.6)'; ctx.font='10px ui-monospace,monospace';
+  ctx.fillText('y (m)', X((ymin+ymax)/2)-14, h-8);
+  ctx.save(); ctx.translate(11,Y((zmin+zmax)/2)+30); ctx.rotate(-Math.PI/2);
+  ctx.fillText('altitude z (m)',0,0); ctx.restore();
+  ctx.fillText(zmax.toFixed(0), 4, Y(zmax)+8);
+  ctx.fillText('0', 6, yg-3);
+  for(let i=0;i<curTrial && i<results.length;i++) drawTrace(ctx,X,Y,results[i],TERM_COLORS[i],results[i].samples.length);
+  if(curTrial>=0 && curTrial<results.length){
+    drawTrace(ctx,X,Y,results[curTrial],TERM_COLORS[curTrial],curIdx+1);
+    const s=results[curTrial].samples, k=clamp(curIdx,0,s.length-1);
+    ctx.fillStyle='#fff'; ctx.strokeStyle=TERM_COLORS[curTrial]; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(X(s[k][1]),Y(s[k][2]),3.5,0,7); ctx.fill(); ctx.stroke();
+  }
+}
+
+/* ============================================================================
+   7. PLAYBACK LOOP
+   ============================================================================ */
+let playing=false, curTrial=0, playT=0, lastWall=0, speedMul=1;
+function startPlayback(){
+  curTrial=0; playT=0; playing=true; lastWall=performance.now();
+  document.getElementById('statusBadge').textContent='flying';
+  highlightRow(0); updateButtons();
+}
+function curSample(){
+  if(!results) return null;
+  const s=results[curTrial]?.samples; if(!s||!s.length) return null;
+  const idx=clamp(Math.round(playT/SIM_DT),0,s.length-1);
+  return {sample:s[idx],idx,n:s.length,trialEnd:s[s.length-1][0]};
+}
+function frame(now){
+  requestAnimationFrame(frame);
+  if(results){
+    if(playing){
+      let dtWall=(now-lastWall)/1000; lastWall=now;
+      if(!(dtWall>0)) dtWall=0; if(dtWall>0.1) dtWall=0.1;
+      playT+=dtWall*speedMul;
+      const s=results[curTrial]?.samples;
+      if(s && playT>=s[s.length-1][0]){
+        // finished this trial → advance
+        if(curTrial<N_TRIALS-1){ curTrial++; playT=0; highlightRow(curTrial); }
+        else { playing=false; playT=s[s.length-1][0];
+               document.getElementById('statusBadge').textContent='complete';
+               highlightRow(-1); updateButtons(); }
+      }
+    } else { lastWall=now; }
+    const cs=curSample();
+    drawOnboard(cs?cs.sample:null);
+    drawMapFrame(curTrial, cs?cs.idx:0);
+    if(cs) updateReadouts(cs.sample);
+    document.getElementById('trialLbl').textContent=(curTrial+1);
+  } else {
+    drawOnboard(null); drawMapFrame(-1,0);
+  }
+}
+function updateReadouts(s){
+  const [t,y,z,theta,psi,fT,,fuel]=s;
+  document.getElementById('roT').textContent=t.toFixed(1);
+  document.getElementById('roPos').textContent=y.toFixed(0)+', '+zbottom([y,z,theta,psi]).toFixed(0);
+  document.getElementById('roTh').textContent=(wrapPi(theta)*180/Math.PI).toFixed(0);
+  const r=results[curTrial], k=clamp(Math.round(t/SIM_DT),0,r.samples.length-1);
+  // velocity from finite difference of samples (not stored) — approximate for readout
+  let v=0; const ss=r.samples;
+  if(k>0){ const a=ss[k-1],b=ss[k]; const dt=b[0]-a[0]||SIM_DT; v=Math.hypot((b[1]-a[1])/dt,(b[2]-a[2])/dt); }
+  document.getElementById('roV').textContent=v.toFixed(1);
+  document.getElementById('roFt').textContent=fT.toFixed(0);
+  document.getElementById('roFuel').textContent=fuel.toFixed(0);
+}
+
+/* ============================================================================
+   8. UI WIRING
+   ============================================================================ */
+const codeEl=document.getElementById('code');
+const runBtn=document.getElementById('run'), ppBtn=document.getElementById('playpause'),
+      rsBtn=document.getElementById('restart'), submitBtn=document.getElementById('submit');
+
+function updateButtons(){
+  const havePlayback=!!results;
+  ppBtn.disabled=!havePlayback; rsBtn.disabled=!havePlayback;
+  ppBtn.textContent=playing?'❚❚ Pause':'▶ Play';
+  runBtn.classList.toggle('dirty',dirty&&tested);
+  submitBtn.disabled=!(tested && !dirty);   // no-URL case handled in the submit handler
+}
+
+// language toggle
+function storeKey(){return lang==='js'?'rocket_code_js':'rocket_code_py';}
+function loadCodeForLang(){
+  const saved=localStorage.getItem(storeKey());
+  codeEl.value = saved!=null ? saved : (lang==='js'?DEFAULT_JS:DEFAULT_PY);
+  document.getElementById('apiHint').innerHTML=API_HINT[lang];
+  codeEl.setAttribute('data-lang',lang);
+}
+function setLang(l){
+  if(l===lang) return;
+  lang=l;
+  document.getElementById('langJs').classList.toggle('on',l==='js');
+  document.getElementById('langPy').classList.toggle('on',l==='py');
+  localStorage.setItem('rocket_lang',l);
+  loadCodeForLang();
+  markDirty();
+}
+document.getElementById('langJs').onclick=()=>setLang('js');
+document.getElementById('langPy').onclick=()=>setLang('py');
+
+function markDirty(){ dirty=true; tested=false; updateButtons(); }
+
+let saveTimer=null;
+codeEl.addEventListener('input',()=>{
+  markDirty();
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>localStorage.setItem(storeKey(),codeEl.value),300);
+});
+// tab inserts spaces
+codeEl.addEventListener('keydown',e=>{
+  if(e.key==='Tab'){e.preventDefault(); const s=codeEl.selectionStart;
+    codeEl.value=codeEl.value.slice(0,s)+'    '+codeEl.value.slice(codeEl.selectionEnd);
+    codeEl.selectionStart=codeEl.selectionEnd=s+4;}
+});
+
+runBtn.onclick=()=>{ runBattery(); };
+ppBtn.onclick=()=>{ if(!results)return; playing=!playing; lastWall=performance.now();
+  document.getElementById('statusBadge').textContent=playing?'flying':'paused'; updateButtons(); };
+rsBtn.onclick=()=>{ if(!results)return; startPlayback(); };
+
+// speed
+const spdEl=document.getElementById('speed');
+function paintSpeed(){ speedMul=Math.pow(2,parseFloat(spdEl.value));
+  document.getElementById('spdVal').textContent=(speedMul>=16?speedMul.toFixed(0):speedMul.toFixed(1))+'×';
+  spdEl.style.setProperty('--fill',((spdEl.value-spdEl.min)/(spdEl.max-spdEl.min)*100)+'%'); }
+spdEl.addEventListener('input',paintSpeed); paintSpeed();
+
+// upload / download / revert
+document.getElementById('download').onclick=()=>{
+  const blob=new Blob([codeEl.value],{type:'text/plain'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='rocket_controller.'+(lang==='js'?'js':'py'); a.click(); URL.revokeObjectURL(a.href);
+};
+document.getElementById('upload').onclick=()=>document.getElementById('file').click();
+document.getElementById('file').onchange=e=>{
+  const f=e.target.files[0]; if(!f)return; const rd=new FileReader();
+  rd.onload=()=>{ codeEl.value=rd.result; localStorage.setItem(storeKey(),codeEl.value); markDirty(); };
+  rd.readAsText(f); e.target.value='';
+};
+document.getElementById('revert').onclick=()=>{
+  codeEl.value=lang==='js'?DEFAULT_JS:DEFAULT_PY;
+  localStorage.setItem(storeKey(),codeEl.value); markDirty();
+};
+
+/* ============================================================================
+   9. SUBMIT
+   ============================================================================ */
+const subMsg=document.getElementById('subMsg');
+function setSub(m,cls){subMsg.textContent=m;subMsg.className=cls||'';}
+const nameEl=document.getElementById('subName'), emailEl=document.getElementById('subEmail');
+nameEl.value=localStorage.getItem('rocket_name')||'';
+emailEl.value=localStorage.getItem('rocket_email')||'';
+function validEmail(e){return /^[^\s@]+@([\w-]+\.)*umich\.edu$/i.test(e.trim());}
+
+submitBtn.onclick=async()=>{
+  if(!tested||dirty){setSub('Run “Test controller” first.','bad');return;}
+  const name=nameEl.value.trim(), email=emailEl.value.trim();
+  nameEl.classList.toggle('bad',!name); emailEl.classList.toggle('bad',!validEmail(email));
+  if(!name){setSub('Enter your name.','bad');return;}
+  if(!validEmail(email)){setSub('Enter a valid @umich.edu email.','bad');return;}
+  localStorage.setItem('rocket_name',name); localStorage.setItem('rocket_email',email);
+  const payload={name,email:email.toLowerCase(),score:+window.__total.toFixed(1),
+    trials:results.map(r=>+r.score.toFixed(1)),
+    landed:results.filter(r=>r.landed&&!r.exploded&&r.score>0).length,
+    lang, code:codeEl.value, ts:new Date().toISOString()};
+
+  if(LEADERBOARD_URL===''){
+    // offline fallback: keep best score for this email in localStorage
+    const key='rocket_board', board=JSON.parse(localStorage.getItem(key)||'[]');
+    const j=board.findIndex(b=>b.email===payload.email);
+    if(j>=0){ if(payload.score>board[j].score) board[j]=payload; }
+    else board.push(payload);
+    board.sort((a,b)=>b.score-a.score);
+    localStorage.setItem(key,JSON.stringify(board));
+    setSub('Saved locally (no leaderboard URL configured — see SETUP.md). '+
+           'Best score for '+payload.email+': '+
+           board.find(b=>b.email===payload.email).score.toFixed(1)+'.','ok');
+    return;
+  }
+  setSub('submitting…');
+  try{
+    const res=await fetch(LEADERBOARD_URL,{method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify(payload)});
+    const data=await res.json().catch(()=>({ok:true}));
+    if(data && data.ok===false) throw new Error(data.error||'server rejected the submission');
+    let rank=''; if(data && data.rank) rank=' You are #'+data.rank+' on the leaderboard.';
+    setSub('✓ Submitted — '+payload.score.toFixed(1)+' pts.'+rank+' See the leaderboard on the briefing page.','ok');
+  }catch(e){
+    setSub('⚠ submit failed: '+(e.message||e)+'\n(Check the leaderboard URL / your connection.)','bad');
+  }
+};
+
+/* ============================================================================
+   10. BOOT
+   ============================================================================ */
+document.getElementById('fFtmax').textContent=PARAMS.fTmax;
+document.getElementById('fTaumax').textContent=PARAMS.tauMax;
+lang=localStorage.getItem('rocket_lang')||'js';
+document.getElementById('langJs').classList.toggle('on',lang==='js');
+document.getElementById('langPy').classList.toggle('on',lang==='py');
+loadCodeForLang();
+updateButtons();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MECHENG 461 · Rocket Lander Challenge</title>
+<script src="config.js"></script>
+<style>
+  :root{
+    --navy:#00274C; --navy-2:#0A1B33; --panel:#102A4C; --maize:#FFCB05;
+    --cyan:#57C7FF; --ink:#EAF1FB; --muted:#8AA6C6; --grid:rgba(138,166,198,.16);
+    --good:#5BD6A0; --bad:#FF6B6B;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--navy-2)}
+  body{background:linear-gradient(180deg,#0B1A30,#08111F 60%);color:var(--ink);font-family:var(--sans);
+       -webkit-font-smoothing:antialiased;padding:26px 22px 60px;min-height:100vh}
+  .wrap{max-width:960px;margin:0 auto}
+  a{color:var(--maize)}
+  .tag{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--maize);
+       border:1px solid rgba(255,203,5,.35);padding:3px 8px;border-radius:4px}
+  .home{float:right;font-size:13px;text-decoration:none}
+  h1{font-size:30px;margin:16px 0 6px;letter-spacing:.01em}
+  .sub{color:var(--muted);font-size:15px;line-height:1.6;max-width:70ch}
+  .cta{display:inline-flex;align-items:center;gap:10px;margin:20px 0 6px;background:var(--maize);color:#08213f;
+       font-weight:700;font-size:16px;padding:13px 22px;border-radius:10px;text-decoration:none;transition:.12s}
+  .cta:hover{filter:brightness(1.06);transform:translateY(-1px)}
+  .cta small{font-weight:500;opacity:.8}
+  .card{background:linear-gradient(180deg,var(--panel),#0C2140);border:1px solid rgba(138,166,198,.16);
+        border-radius:12px;padding:18px 20px;margin-top:20px}
+  .card h2{font-size:17px;margin:0 0 12px}
+  .card h3{font-size:14px;color:var(--cyan);margin:18px 0 6px;font-family:var(--mono);letter-spacing:.02em}
+  p{line-height:1.65;font-size:14px;color:#d6e2f2}
+  ul{line-height:1.7;font-size:14px;color:#d6e2f2;padding-left:20px}
+  code{font-family:var(--mono);background:#0a1d38;padding:1px 6px;border-radius:4px;font-size:13px}
+  .eq{font-family:var(--mono);background:#08182f;border:1px solid rgba(138,166,198,.18);border-radius:8px;
+      padding:14px 16px;font-size:13.5px;line-height:1.9;overflow-x:auto;white-space:pre;color:#cfe3ff}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:680px){.two{grid-template-columns:1fr}}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:6px 9px;text-align:left;border-bottom:1px solid rgba(138,166,198,.12)}
+  th{color:var(--muted);font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+  td.num,th.num{text-align:right;font-family:var(--mono)}
+  /* leaderboard */
+  .lbhead{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap}
+  .lbhead button{font-family:var(--sans);font-size:12px;border:1px solid rgba(138,166,198,.25);
+    background:#122f52;color:var(--ink);padding:6px 12px;border-radius:7px;cursor:pointer}
+  .lbhead button:hover{background:#173a66}
+  table.lb td.rank{font-family:var(--mono);color:var(--maize);width:40px}
+  table.lb td.score{text-align:right;font-family:var(--mono);font-weight:700;color:var(--maize)}
+  table.lb tr:nth-child(1) td.rank{font-size:16px}
+  #lbBody td{font-size:13.5px}
+  .medal{font-size:15px}
+  #lbNote{color:var(--muted);font-size:12px;margin-top:10px;line-height:1.5}
+  .pill{font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:20px;background:rgba(87,199,255,.14);color:var(--cyan)}
+  footer{color:var(--muted);font-size:12px;margin-top:28px;line-height:1.6}
+  .kbd{font-family:var(--mono);color:var(--maize)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="home" href="../../index.html">← all demos</a>
+  <span class="tag" id="courseTag">MECHENG&nbsp;461</span>
+  <h1>🚀 Rocket Lander Challenge</h1>
+  <p class="sub">Design a controller that flies a booster from an arbitrary post-separation state down to a soft,
+     upright landing on the pad — then compete for the top of the class leaderboard. Everything runs in your
+     browser; write your controller in JavaScript or Python.</p>
+
+  <a class="cta" href="play.html">Get started&nbsp; →&nbsp; <small>open the controller workbench</small></a>
+
+  <!-- LEADERBOARD -->
+  <div class="card">
+    <div class="lbhead">
+      <h2 style="margin:0">🏆 Leaderboard</h2>
+      <div><span class="pill" id="lbSrc">—</span> <button id="lbRefresh">↻ Refresh</button></div>
+    </div>
+    <table class="lb"><thead>
+      <tr><th class="rank">#</th><th>Name</th><th class="num">Landed</th><th class="num">Score</th><th class="num">When</th></tr>
+    </thead><tbody id="lbBody"><tr><td colspan="5" style="color:var(--muted)">Loading…</td></tr></tbody></table>
+    <div id="lbNote"></div>
+  </div>
+
+  <!-- THE MISSION -->
+  <div class="card">
+    <h2>The mission</h2>
+    <p>A planar rocket booster has just separated. You are handed its full state and must compute the thrust and
+       gimbal torque at every instant to bring it to the landing pad — centered at <code>y = 0</code>, spanning
+       <code>y ∈ [−20, 20] m</code> — within 60 seconds. Your controller faces a fixed battery of
+       <strong>10 initial conditions of increasing difficulty</strong> (the same ten for everyone): higher
+       altitudes, larger tilts, and faster spins as you go. Land all ten cleanly for a perfect run.</p>
+    <p>It is essentially an inverted pendulum on a cart — but the cart is flying, and the only way to steer
+       sideways is to tip the whole vehicle and vector its thrust. Getting upright, killing horizontal drift,
+       and touching down gently all at once is the whole game.</p>
+  </div>
+
+  <!-- DYNAMICS -->
+  <div class="card">
+    <h2>The plant — rocket dynamics</h2>
+    <p>State (constant mass): position <code>(y, z)</code>, tilt from vertical <code>θ</code>, thrust-gimbal
+       angle <code>ψ</code>, and their rates. You command two inputs each step: thrust
+       <code>f<sub>T</sub></code> and gimbal torque <code>τ</code>. The gimbal angle <code>ψ</code> is itself a
+       state — <code>τ</code> slews it — so steering is a cascade.</p>
+    <div class="eq" id="eqBox"></div>
+    <div class="two">
+      <div>
+        <h3>Parameters</h3>
+        <table>
+          <tr><td>mass <code>m</code></td><td class="num" id="pm"></td></tr>
+          <tr><td>gravity <code>g</code></td><td class="num" id="pg"></td></tr>
+          <tr><td>half-length <code>L</code></td><td class="num" id="pL"></td></tr>
+          <tr><td>body inertia <code>J = mL²/3</code></td><td class="num" id="pJ"></td></tr>
+          <tr><td>gimbal inertia <code>J<sub>T</sub></code></td><td class="num" id="pJT"></td></tr>
+          <tr><td>exhaust speed <code>v<sub>e</sub></code></td><td class="num" id="pve"></td></tr>
+        </table>
+      </div>
+      <div>
+        <h3>Actuator limits</h3>
+        <table>
+          <tr><td>thrust <code>f<sub>T</sub></code></td><td class="num" id="pft"></td></tr>
+          <tr><td>gimbal torque <code>τ</code></td><td class="num" id="ptau"></td></tr>
+        </table>
+        <h3>Notes</h3>
+        <p style="font-size:13px;margin:0">This is the handout model with the thrust coefficient folded into
+           <code>f<sub>T</sub></code> (so it is a force in newtons) and the mass equation dropped —
+           <strong>mass is held constant</strong>. Fuel is still tracked as
+           <code>∫ f<sub>T</sub>/v<sub>e</sub> dt</code> for scoring only. Integrated with RK4 at 50 Hz.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCORING -->
+  <div class="card">
+    <h2>How the score works</h2>
+    <p>At touchdown, six quantities are measured. Five of them are <strong>hard constraints</strong>: exceed any
+       limit and that trial scores <strong>0</strong> (your rocket blows up). Fuel is not a hard limit — it just
+       costs points. Within the limits, each trial earns</p>
+    <div class="eq">J  =  Σ  αᵢ · (Mᵢ − |Pᵢ|) / Mᵢ        (0 if any hard constraint is violated)</div>
+    <div class="scorewrap" style="overflow-x:auto">
+    <table>
+      <thead><tr><th>Pᵢ — measured</th><th class="num">Limit Mᵢ</th><th class="num">Weight αᵢ</th><th>Hard?</th></tr></thead>
+      <tbody>
+        <tr><td>Fuel used</td><td class="num">150 kg</td><td class="num">10</td><td>no — costs points</td></tr>
+        <tr><td>Horizontal miss <code>|y|</code></td><td class="num">20 m</td><td class="num">30</td><td>yes</td></tr>
+        <tr><td>Height of bottom off ground</td><td class="num">10 m</td><td class="num">20</td><td>yes — must reach ground</td></tr>
+        <tr><td>Landing tilt <code>|θ|</code></td><td class="num">π/6 (30°)</td><td class="num">20</td><td>yes</td></tr>
+        <tr><td>Touchdown speed</td><td class="num">5 m/s</td><td class="num">10</td><td>yes</td></tr>
+        <tr><td>Spin rate <code>|θ̇|</code></td><td class="num">1 rad/s</td><td class="num">10</td><td>yes</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p>A perfect, zero-fuel landing scores 100. Across the 10-trial battery your total is the sum, so the
+       <strong>maximum possible score is 1000</strong>. Take longer than 60 s and the trial is a timeout (0).</p>
+  </div>
+
+  <!-- HOW TO PLAY -->
+  <div class="card">
+    <h2>Writing your controller</h2>
+    <ul>
+      <li>Open the <a href="play.html">workbench</a> and edit the controller in <strong>JavaScript</strong> or
+        <strong>Python</strong> (toggle at the top of the editor). Anything goes — PID, LQR, MPC, gain-scheduling,
+        switching logic. You get the full state every step.</li>
+      <li>Hit <span class="kbd">Test controller</span> to fly all 10 trials. Watch the onboard camera and the
+        superimposed trajectories on the mission map; set the playback speed to taste.</li>
+      <li>Your code auto-saves in this browser, and you can <span class="kbd">Download</span> / <span class="kbd">Upload</span>
+        a controller file to back it up or work offline.</li>
+      <li>Happy with your total? Enter your name and <code>@umich.edu</code> email and
+        <span class="kbd">Submit score</span>. Only your best score is kept, so resubmitting can only help.</li>
+    </ul>
+    <a class="cta" href="play.html" style="margin-bottom:0">Get started&nbsp; →</a>
+  </div>
+
+  <footer>
+    University of Michigan · College of Engineering. Adapted from the Nonlinear Control rocket-landing project
+    (Sreenath · Grizzle · Ames). Runs entirely client-side.
+  </footer>
+</div>
+
+<script>
+"use strict";
+const CFG=(window.ROCKET_CONFIG||{});
+const LEADERBOARD_URL=CFG.leaderboardUrl||"";
+if(CFG.course) document.getElementById('courseTag').innerHTML=CFG.course.replace(/ /g,'&nbsp;');
+
+// ---- parameter box (mirrors play.html PARAMS) ----
+const P={m:175,g:9.81,L:5,JT:40,ve:1000,fTmax:6000,tauMax:1000}; P.J=P.m*P.L*P.L/3;
+document.getElementById('eqBox').textContent=
+`ÿ  = −(f_T / m) · sin(θ + ψ)
+z̈  =  (f_T / m) · cos(θ + ψ) − g
+θ̈  = −(L / J) · f_T · sin(ψ)
+ψ̈  =  τ / J_T
+fuel = ∫ f_T / v_e dt      (mass m stays constant)`;
+const set=(id,v)=>document.getElementById(id).textContent=v;
+set('pm',P.m+' kg'); set('pg',P.g+' m/s²'); set('pL',P.L+' m');
+set('pJ',P.J.toFixed(0)+' kg·m²'); set('pJT',P.JT+' kg·m²'); set('pve',P.ve+' m/s');
+set('pft','0 … '+P.fTmax+' N'); set('ptau','± '+P.tauMax+' N·m');
+
+// ---- leaderboard ----
+const lbBody=document.getElementById('lbBody'), lbNote=document.getElementById('lbNote'), lbSrc=document.getElementById('lbSrc');
+const medals=['🥇','🥈','🥉'];
+function fmtWhen(ts){ if(!ts) return '—'; const d=new Date(ts); if(isNaN(d)) return '—';
+  return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function render(rows,src){
+  lbSrc.textContent=src;
+  if(!rows||!rows.length){ lbBody.innerHTML='<tr><td colspan="5" style="color:var(--muted)">No scores yet — be the first!</td></tr>'; return; }
+  rows.sort((a,b)=>b.score-a.score);
+  lbBody.innerHTML=rows.slice(0,50).map((r,i)=>
+    `<tr><td class="rank">${i<3?'<span class="medal">'+medals[i]+'</span>':(i+1)}</td>`+
+    `<td>${esc(r.name)}</td>`+
+    `<td class="num">${r.landed!=null?esc(r.landed)+'/10':'—'}</td>`+
+    `<td class="score">${Number(r.score).toFixed(1)}</td>`+
+    `<td class="num">${fmtWhen(r.ts)}</td></tr>`).join('');
+}
+async function loadBoard(){
+  lbBody.innerHTML='<tr><td colspan="5" style="color:var(--muted)">Loading…</td></tr>';
+  if(LEADERBOARD_URL===''){
+    const board=JSON.parse(localStorage.getItem('rocket_board')||'[]');
+    render(board,'local (this browser)');
+    lbNote.innerHTML='No shared leaderboard is configured yet. Scores you submit are stored only in this browser. '+
+      'To turn on the class-wide Google Sheet leaderboard, follow <code>SETUP.md</code> and set '+
+      '<code>leaderboardUrl</code> in <code>config.js</code>.';
+    return;
+  }
+  try{
+    const res=await fetch(LEADERBOARD_URL,{method:'GET'});
+    const data=await res.json();
+    render(data.leaderboard||data||[],'live');
+    lbNote.innerHTML='Only each student’s best score is kept. Submit from the '+
+      '<a href="play.html">workbench</a> after testing your controller.';
+  }catch(e){
+    render([], 'unavailable');
+    lbNote.innerHTML='⚠ Could not reach the leaderboard ('+esc(e.message||e)+'). '+
+      'It may not be deployed yet — see <code>SETUP.md</code>.';
+  }
+}
+document.getElementById('lbRefresh').onclick=loadBoard;
+loadBoard();
+</script>
+</body>
+</html>
