@@ -6,7 +6,7 @@ window.ROCKET_CONFIG = {
   // Paste the Google Apps Script Web-App URL here after you deploy it
   // (see SETUP.md). Leave "" to run fully offline: the simulator still works,
   // and the leaderboard falls back to this browser's local storage.
-  leaderboardUrl: "",
+  leaderboardUrl: "https://script.google.com/a/macros/umich.edu/s/AKfycbwWr2r7zeB_Ql9P09sSGukricCxJMyWD-GKRvHNCQ4gwu78vR0vYgVv5W-54-JkDoyP6g/exec",
 
   // Course label shown in the header.
   course: "MECHENG 461",
