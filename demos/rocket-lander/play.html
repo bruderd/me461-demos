@@ -84,7 +84,9 @@
   table.score th,table.score td{padding:5px 7px;text-align:right;border-bottom:1px solid rgba(138,166,198,.12)}
   table.score th{color:var(--muted);font-weight:600;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
   table.score td:first-child,table.score th:first-child{text-align:left}
-  table.score tr.cur td{background:rgba(255,203,5,.08)}
+  table.score tbody tr{cursor:pointer}
+  table.score tbody tr:hover td{background:rgba(87,199,255,.08)}
+  table.score tr.cur td{background:rgba(255,203,5,.10)}
   table.score td .ok{color:var(--good)} table.score td .no{color:var(--bad)}
   .total{display:flex;align-items:baseline;justify-content:space-between;margin-top:10px;
          border-top:1px solid rgba(138,166,198,.25);padding-top:10px}
@@ -120,7 +122,7 @@
       <canvas id="onboard" height="380"></canvas>
     </div>
     <div class="card">
-      <h2>Mission map · <span class="lc">all trajectories (landing pad at y = 0)</span></h2>
+      <h2>Mission map · <span class="lc">all trajectories — click a trace to replay it</span></h2>
       <canvas id="map" height="380"></canvas>
     </div>
   </div>
@@ -137,7 +139,8 @@
   <div class="bar">
     <button id="run" class="primary">▶ Test controller</button>
     <button id="playpause" disabled>❚❚ Pause</button>
-    <button id="restart" disabled>⟲ Replay</button>
+    <button id="restart" disabled>⟲ Replay all</button>
+    <button id="skip" disabled>⏭ Show all traces</button>
     <div class="speed">
       <span class="k">Playback speed <b id="spdVal">1.0×</b></span>
       <input id="speed" type="range" min="-1" max="4" step="0.05" value="0">
@@ -497,6 +500,8 @@ function fillScores(){
       `<td>${cell(P?P[5].toFixed(2):0)}</td>`+
       `<td>${cell(P?P[0].toFixed(0):0)}</td>`+
       `<td><b>${r.score.toFixed(1)}</b></td>`;
+    tr.title='Replay trial '+(i+1);
+    tr.onclick=()=>playTrial(i);
     scoreBody.appendChild(tr);
   });
   document.getElementById('totalVal').textContent=total.toFixed(1);
@@ -531,6 +536,28 @@ function drawOnboard(sample){
   const spanY=42, ppm=h/spanY;                       // metres shown vertically
   const sx=wy=>w/2+(wy-y)*ppm, sy=wz=>h/2-(wz-z)*ppm;
   const Lpx=PARAMS.L*ppm;
+
+  // coordinate grid — fixed to the world, so it scrolls past as the camera
+  // follows the rocket (that motion is the whole point of drawing it).
+  const step=10;                                     // grid spacing, metres
+  const yL=y-(w/2)/ppm, yR=y+(w/2)/ppm, zB=z-(h/2)/ppm, zT=z+(h/2)/ppm;
+  ctx.font='10px ui-monospace,monospace'; ctx.lineWidth=1;
+  for(let gz=Math.ceil(zB/step)*step; gz<=zT; gz+=step){   // horizontal lines: constant z (altitude)
+    if(Math.abs(gz)<1e-6) continue;                  // ground line drawn separately
+    const Y=sy(gz);
+    ctx.strokeStyle='rgba(138,166,198,.10)';
+    ctx.beginPath(); ctx.moveTo(0,Y); ctx.lineTo(w,Y); ctx.stroke();
+    ctx.fillStyle='rgba(138,166,198,.40)'; ctx.fillText(gz.toFixed(0), 4, Y-3);
+  }
+  for(let gy=Math.ceil(yL/step)*step; gy<=yR; gy+=step){   // vertical lines: constant y (downrange)
+    const X=sx(gy), zero=Math.abs(gy)<1e-6;          // y=0 is the pad-center line — highlight it
+    ctx.strokeStyle=zero?'rgba(255,203,5,.28)':'rgba(138,166,198,.10)';
+    ctx.beginPath(); ctx.moveTo(X,0); ctx.lineTo(X,h); ctx.stroke();
+    if(X>40){ ctx.fillStyle=zero?'rgba(255,203,5,.8)':'rgba(138,166,198,.42)';
+      ctx.fillText(gy.toFixed(0), X+3, 46); }   // labels along the top stay clear of the ground
+  }
+  ctx.fillStyle='rgba(138,166,198,.55)'; ctx.font='9px ui-monospace,monospace';
+  ctx.fillText('z (m)', 4, 34); ctx.fillText('y (m) →', w-52, 46);
 
   // ground + pad, if within view
   const zg=sy(0);
@@ -599,6 +626,12 @@ function setupMapBounds(){
   const padY=(ymax-ymin)*0.08+6; ymin-=padY; ymax+=padY;
   mapBounds={ymin,ymax,zmin:-zmax*0.04,zmax:zmax*1.06};
 }
+// world (y,z) → screen (px), shared by the renderer and the click-to-replay hit test.
+function mapXY(w,h){
+  const {ymin,ymax,zmin,zmax}=mapBounds, padL=40,padR=14,padT=14,padB=26;
+  return { X:wy=>padL+((wy-ymin)/(ymax-ymin))*(w-padL-padR),
+           Y:wz=>padT+(1-(wz-zmin)/(zmax-zmin))*(h-padT-padB) };
+}
 function drawTrace(ctx,X,Y,r,col,upto){
   const s=r.samples; if(!s.length) return;
   const n=Math.min(upto,s.length);
@@ -618,9 +651,8 @@ function drawMapFrame(curTrial,curIdx){
   ctx.clearRect(0,0,w,h);
   if(!mapBounds){ ctx.fillStyle='rgba(138,166,198,.5)'; ctx.font='13px ui-monospace,monospace';
     ctx.fillText('Trajectories appear here after a test.',16,26); return; }
-  const {ymin,ymax,zmin,zmax}=mapBounds, padL=40,padR=14,padT=14,padB=26;
-  const X=wy=>padL+((wy-ymin)/(ymax-ymin))*(w-padL-padR);
-  const Y=wz=>padT+(1-(wz-zmin)/(zmax-zmin))*(h-padT-padB);
+  const {ymin,ymax,zmin,zmax}=mapBounds;
+  const {X,Y}=mapXY(w,h);
   const yg=Y(0);
   const grd=ctx.createLinearGradient(0,yg,0,h); grd.addColorStop(0,'#123a2a'); grd.addColorStop(1,'#0a1f16');
   ctx.fillStyle=grd; ctx.fillRect(0,yg,w,h-yg);
@@ -633,7 +665,13 @@ function drawMapFrame(curTrial,curIdx){
   ctx.fillText('altitude z (m)',0,0); ctx.restore();
   ctx.fillText(zmax.toFixed(0), 4, Y(zmax)+8);
   ctx.fillText('0', 6, yg-3);
-  for(let i=0;i<curTrial && i<results.length;i++) drawTrace(ctx,X,Y,results[i],TERM_COLORS[i],results[i].samples.length);
+  // Which non-active traces to show fully: in sequential play, the ones already
+  // flown; in a solo replay, every OTHER trace (as static context).
+  for(let i=0;i<results.length;i++){
+    if(i===curTrial) continue;
+    const full = playMode==='solo' ? true : (i<curTrial);
+    if(full) drawTrace(ctx,X,Y,results[i],TERM_COLORS[i],results[i].samples.length);
+  }
   if(curTrial>=0 && curTrial<results.length){
     drawTrace(ctx,X,Y,results[curTrial],TERM_COLORS[curTrial],curIdx+1);
     const s=results[curTrial].samples, k=clamp(curIdx,0,s.length-1);
@@ -645,11 +683,22 @@ function drawMapFrame(curTrial,curIdx){
 /* ============================================================================
    7. PLAYBACK LOOP
    ============================================================================ */
-let playing=false, curTrial=0, playT=0, lastWall=0, speedMul=1;
-function startPlayback(){
-  curTrial=0; playT=0; playing=true; lastWall=performance.now();
-  document.getElementById('statusBadge').textContent='flying';
-  highlightRow(0); updateButtons();
+let playing=false, curTrial=0, playT=0, lastWall=0, speedMul=1, playMode='seq';
+const badge=()=>document.getElementById('statusBadge');
+function startPlayback(){                              // play all trials 1→10 in order
+  playMode='seq'; curTrial=0; playT=0; playing=true; lastWall=performance.now();
+  badge().textContent='flying'; highlightRow(0); updateButtons();
+}
+function playTrial(i){                                 // replay a single trial (others shown as context)
+  if(!results||!results[i]) return;
+  playMode='solo'; curTrial=i; playT=0; playing=true; lastWall=performance.now();
+  badge().textContent='replay '+(i+1); highlightRow(i); updateButtons();
+}
+function skipAnimation(){                              // jump to the end: show every trace at once
+  if(!results) return;
+  playMode='seq'; playing=false; curTrial=N_TRIALS-1;
+  playT=results[curTrial].samples[results[curTrial].samples.length-1][0];
+  badge().textContent='complete'; highlightRow(-1); updateButtons();
 }
 function curSample(){
   if(!results) return null;
@@ -665,12 +714,12 @@ function frame(now){
       if(!(dtWall>0)) dtWall=0; if(dtWall>0.1) dtWall=0.1;
       playT+=dtWall*speedMul;
       const s=results[curTrial]?.samples;
-      if(s && playT>=s[s.length-1][0]){
-        // finished this trial → advance
-        if(curTrial<N_TRIALS-1){ curTrial++; playT=0; highlightRow(curTrial); }
-        else { playing=false; playT=s[s.length-1][0];
-               document.getElementById('statusBadge').textContent='complete';
-               highlightRow(-1); updateButtons(); }
+      if(s && playT>=s[s.length-1][0]){               // finished the current trial
+        if(playMode==='seq' && curTrial<N_TRIALS-1){ curTrial++; playT=0; highlightRow(curTrial); }
+        else { playing=false; playT=s[s.length-1][0]; // end of sequence, or the single solo trial
+               badge().textContent='complete';
+               if(playMode==='seq') highlightRow(-1); // solo keeps its row highlighted
+               updateButtons(); }
       }
     } else { lastWall=now; }
     const cs=curSample();
@@ -701,11 +750,12 @@ function updateReadouts(s){
    ============================================================================ */
 const codeEl=document.getElementById('code');
 const runBtn=document.getElementById('run'), ppBtn=document.getElementById('playpause'),
-      rsBtn=document.getElementById('restart'), submitBtn=document.getElementById('submit');
+      rsBtn=document.getElementById('restart'), skipBtn=document.getElementById('skip'),
+      submitBtn=document.getElementById('submit');
 
 function updateButtons(){
   const havePlayback=!!results;
-  ppBtn.disabled=!havePlayback; rsBtn.disabled=!havePlayback;
+  ppBtn.disabled=!havePlayback; rsBtn.disabled=!havePlayback; skipBtn.disabled=!havePlayback;
   ppBtn.textContent=playing?'❚❚ Pause':'▶ Play';
   runBtn.classList.toggle('dirty',dirty&&tested);
   submitBtn.disabled=!(tested && !dirty);   // no-URL case handled in the submit handler
@@ -750,6 +800,28 @@ runBtn.onclick=()=>{ runBattery(); };
 ppBtn.onclick=()=>{ if(!results)return; playing=!playing; lastWall=performance.now();
   document.getElementById('statusBadge').textContent=playing?'flying':'paused'; updateButtons(); };
 rsBtn.onclick=()=>{ if(!results)return; startPlayback(); };
+skipBtn.onclick=()=>{ skipAnimation(); };
+
+// click a mission-map trace to replay that trial; pointer cursor when hovering one
+function nearestTrial(cx,cy,tol){
+  if(!results||!mapBounds) return -1;
+  const rect=mapc.getBoundingClientRect(), {X,Y}=mapXY(rect.width,rect.height);
+  let best=-1, bestD=tol*tol;
+  for(let i=0;i<results.length;i++) for(const s of results[i].samples){
+    const dx=X(s[1])-cx, dy=Y(s[2])-cy, d=dx*dx+dy*dy;
+    if(d<bestD){ bestD=d; best=i; }
+  }
+  return best;
+}
+mapc.addEventListener('click',e=>{
+  const rect=mapc.getBoundingClientRect();
+  const i=nearestTrial(e.clientX-rect.left, e.clientY-rect.top, 14);
+  if(i>=0) playTrial(i);
+});
+mapc.addEventListener('mousemove',e=>{
+  const rect=mapc.getBoundingClientRect();
+  mapc.style.cursor = nearestTrial(e.clientX-rect.left, e.clientY-rect.top, 14)>=0 ? 'pointer' : 'default';
+});
 
 // speed
 const spdEl=document.getElementById('speed');

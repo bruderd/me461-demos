@@ -210,9 +210,22 @@ no explosions, no errors — proves the whole toPy/mem/return-unwrap chain. Scre
 gimballed nozzle + maize/orange flame + ground/pad follow-cam; mission map with all 10 colored traces spiraling to
 the pad; briefing page equations/params/scoring/leaderboard; top-level card in the grid.
 
-**Likely next steps (none in flight):** on request, deploy the Apps Script + set `config.js` `leaderboardUrl`, then
-commit/push. Optional polish: a live per-trial "running tally" reveal during playback (currently the full board is
-filled right after precompute); a Python starter that also handles the 3 high-altitude trials.
+**Tweaks (post-build, this session, verified):** (1) onboard view now draws a **world-fixed coordinate grid**
+(10 m spacing) that scrolls as the follow-cam tracks the rocket — y gridlines with the **y=0 pad-center line
+highlighted maize**, z/altitude labels on the left; grid is drawn BEFORE the ground fill so underground lines are
+covered, and y-labels sit along the TOP (not bottom) so the ground never hides them. (2) **⏭ Show all traces**
+button (`skipAnimation()`) jumps to the end so every trajectory shows at once. (3) **click-to-replay a single
+trial** — click a scoreboard row (`tr.onclick=playTrial(i)`) or a mission-map trace (`nearestTrial` hit-test,
+14px tol, + pointer cursor on hover). Playback now has a `playMode` ∈ {'seq','solo'}: seq shows traces 0..cur-1;
+solo shows every OTHER trace full as context + the replayed one animating and keeps its row highlighted. `mapXY(w,h)`
+extracted so the renderer and the click hit-test share one transform. "Replay" button relabeled "Replay all".
+Re-verified headless: total still 647.77, skip→all-10 traces, solo→playMode 'solo' on the clicked trial, rows
+clickable, no JS errors; screenshot confirms the grid + maize pad-center line. NOTE: the user has since set a real
+`leaderboardUrl` in `config.js` (backend deployed) — keep it.
+
+**Likely next steps (none in flight):** on request, commit/push. Optional polish: a live per-trial "running tally"
+reveal during playback (user chose to KEEP fill-immediately); a Python starter that also handles the 3 high-altitude
+trials.
 
 
 
