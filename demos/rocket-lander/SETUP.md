@@ -24,10 +24,21 @@ free, and you own the data.
 
 ---
 
+> ⚠️ **Use a *personal* Google account (e.g. an @gmail.com), NOT your @umich.edu
+> account.** University of Michigan (like most Google Workspace domains) blocks the
+> public **"Anyone"** access level for Apps Script web apps — the most open option a
+> umich.edu account can pick is *"Anyone within University of Michigan"*, which forces
+> a Shibboleth/U-M login. A student's browser can't complete that login on a
+> cross-origin `fetch`, so the leaderboard fails with **"NetworkError when attempting
+> to fetch resource."** A umich.edu deployment is also easy to spot: its URL contains
+> `/a/macros/umich.edu/…`, whereas a public one is `https://script.google.com/macros/s/…/exec`.
+> See **Troubleshooting** below if you already hit this.
+
 ## Steps (~10 minutes, one time)
 
-1. **Create the Sheet.** In Google Drive → New → Google Sheets. Name it e.g.
-   "ME461 Rocket Leaderboard". (You don't need to add headers — the script does.)
+1. **Create the Sheet.** Signed in to Google Drive **with a personal account** (see the
+   warning above) → New → Google Sheets. Name it e.g. "ME461 Rocket Leaderboard".
+   (You don't need to add headers — the script does.)
 
 2. **Create the Doc** (optional, for the code archive). New → Google Docs, name it e.g.
    "ME461 Rocket Submissions". Copy its **ID** from the URL:
@@ -63,6 +74,22 @@ free, and you own the data.
    the workbench, run a test, and submit a score; refresh the board to see it appear.
 
 ---
+
+## Troubleshooting
+
+- **Leaderboard says "Could not reach the leaderboard (NetworkError…)".** Your web app
+  is gated behind login instead of being public. Check the `/exec` URL you pasted into
+  `config.js`:
+  - If it contains **`/a/macros/umich.edu/`**, it was deployed from your U-M Workspace
+    account and redirects students to the U-M SSO page (you can confirm with
+    `curl -sL "…/exec"` — it lands on `shibboleth.umich.edu`). **Fix:** recreate the
+    Sheet + Doc + Apps Script under a **personal Google account** and redeploy with
+    *Who has access: Anyone* (see the warning at the top). The new URL will read
+    `https://script.google.com/macros/s/…/exec`.
+  - If it's already a `/macros/s/…` URL, re-check the deployment's **Who has access** is
+    set to **Anyone** (not "Only myself" / "Anyone with a Google account").
+  - Quick test: `curl -sL "<your /exec URL>"` should print JSON (`{"ok":true,…}`), not
+    HTML and not a redirect to a login page.
 
 ## Updating the script later
 

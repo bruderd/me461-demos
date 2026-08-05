@@ -57,6 +57,15 @@
   .pill{font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:20px;background:rgba(87,199,255,.14);color:var(--cyan)}
   footer{color:var(--muted);font-size:12px;margin-top:28px;line-height:1.6}
   .kbd{font-family:var(--mono);color:var(--maize)}
+  /* anatomy diagram */
+  #diagram{width:100%;height:520px;display:block;border-radius:10px;
+    border:1px solid rgba(138,166,198,.18);background:linear-gradient(180deg,#0a1930,#0c2038);margin:8px 0 6px}
+  @media(max-width:680px){#diagram{height:420px}}
+  .diglegend{display:flex;flex-wrap:wrap;gap:7px 18px;margin-top:6px;font-size:12.5px;color:#cfe3ff;line-height:1.5}
+  .diglegend span{display:inline-flex;align-items:center;gap:6px}
+  .diglegend b{font-family:var(--mono);font-weight:600;color:#eaf1fb}
+  .diglegend i.dot{width:9px;height:9px;border-radius:2px;display:inline-block;flex:0 0 auto}
+  .digcap{color:var(--muted);font-size:12px;margin:2px 0 0;font-style:italic}
 </style>
 </head>
 <body>
@@ -93,6 +102,28 @@
     <p>It is essentially an inverted pendulum on a cart — but the cart is flying, and the only way to steer
        sideways is to tip the whole vehicle and vector its thrust. Getting upright, killing horizontal drift,
        and touching down gently all at once is the whole game.</p>
+  </div>
+
+  <!-- ANATOMY DIAGRAM -->
+  <div class="card">
+    <h2>Anatomy of the booster</h2>
+    <p>Every symbol in the equations below, in one picture. The
+       <b style="color:var(--cyan)">kinematic state</b> says where the rocket is and how it is oriented;
+       the two <b style="color:var(--maize)">inputs you command</b> are the thrust magnitude and the gimbal
+       torque. Distances and angles are drawn to a single scale.</p>
+    <canvas id="diagram"></canvas>
+    <p class="digcap">A planar booster in the inertial frame (y horizontal, z up). The gimbal deflects the
+       thrust by ψ off the body axis; because the thrust acts a distance L below the center of mass, that
+       deflection is what rotates the whole vehicle.</p>
+    <div class="diglegend">
+      <span><i class="dot" style="background:#57C7FF"></i><b>y, z</b>&nbsp;position (inertial)</span>
+      <span><i class="dot" style="background:#57C7FF"></i><b>θ</b>&nbsp;tilt from vertical &nbsp;·&nbsp; <b>ψ</b>&nbsp;gimbal angle</span>
+      <span><i class="dot" style="background:#5BD6A0"></i><b>ẏ, ż</b>&nbsp;velocity &nbsp;·&nbsp; <b>θ̇, ψ̇</b>&nbsp;rates (also state)</span>
+      <span><i class="dot" style="background:#FFCB05"></i><b>f<sub>T</sub></b>&nbsp;thrust &nbsp;·&nbsp; <b>τ</b>&nbsp;gimbal torque&nbsp;(inputs)</span>
+      <span><i class="dot" style="background:#FFB27A"></i><b>m g</b>&nbsp;weight (mass&nbsp;·&nbsp;gravity)</span>
+      <span><i class="dot" style="background:#9fb0c6"></i><b>L</b>&nbsp;half-length (CoM→nozzle) &nbsp;·&nbsp; <b>J, J<sub>T</sub></b>&nbsp;inertias &nbsp;·&nbsp; <b>v<sub>e</sub></b>&nbsp;exhaust speed (sets fuel)</span>
+      <span><i class="dot" style="background:#9fb0c6"></i><b>z<sub>bottom</sub> = z − L cos θ</b>&nbsp;height of the feet — this is what must reach the pad</span>
+    </div>
   </div>
 
   <!-- DYNAMICS -->
@@ -237,6 +268,197 @@ async function loadBoard(){
 }
 document.getElementById('lbRefresh').onclick=loadBoard;
 loadBoard();
+
+// ============================================================================
+//  ANATOMY DIAGRAM — the same hand-drawn rocket as the workbench, annotated
+//  with every state, input, and parameter. Static schematic (redraw on resize).
+// ============================================================================
+(function(){
+  const cv=document.getElementById('diagram');
+  if(!cv) return;
+  const C={maize:'#FFCB05',cyan:'#57C7FF',good:'#5BD6A0',warm:'#FFB27A',
+           muted:'#8AA6C6',dim:'rgba(138,166,198,.55)',ink:'#EAF1FB',navy:'#0A1B33'};
+  const MONO='ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+
+  // scene: a lightly tilted booster on its way down
+  const theta=22*Math.PI/180, psi=15*Math.PI/180;   // tilt / gimbal
+  const Lm=5, yc=7.6, zc=9.2;                         // half-length (m), CoM (m)
+
+  function arrow(ctx,x1,y1,x2,y2,col,lw,hs){
+    ctx.strokeStyle=col; ctx.fillStyle=col; ctx.lineWidth=lw;
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    const a=Math.atan2(y2-y1,x2-x1); hs=hs||8;
+    ctx.beginPath(); ctx.moveTo(x2,y2);
+    ctx.lineTo(x2-hs*Math.cos(a-0.42),y2-hs*Math.sin(a-0.42));
+    ctx.lineTo(x2-hs*Math.cos(a+0.42),y2-hs*Math.sin(a+0.42));
+    ctx.closePath(); ctx.fill();
+  }
+  function txt(ctx,s,x,y,col,px,al,it){
+    ctx.fillStyle=col; ctx.font=(it?'italic ':'')+px+'px '+MONO;
+    ctx.textAlign=al||'left'; ctx.textBaseline='middle'; ctx.fillText(s,x,y);
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  }
+  const norm=a=>{ while(a>Math.PI)a-=2*Math.PI; while(a<-Math.PI)a+=2*Math.PI; return a; };
+  function arc(ctx,cx,cy,r,a1,a2,col,lw){
+    const d=norm(a2-a1), n=Math.max(2,Math.ceil(Math.abs(d)/0.1));
+    ctx.strokeStyle=col; ctx.lineWidth=lw||1.6; ctx.beginPath();
+    for(let i=0;i<=n;i++){const a=a1+d*i/n,x=cx+r*Math.cos(a),y=cy+r*Math.sin(a); i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+    ctx.stroke(); return a1+d/2;
+  }
+
+  function draw(){
+    const dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight;
+    if(!w||!h) return;
+    cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr);
+    const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,w,h);
+
+    // ---- world→screen (equal aspect) ----
+    const yMin=-6,yMax=20,zMin=-2,zMax=17.5, pad=18;
+    const scale=Math.min((w-2*pad)/(yMax-yMin),(h-2*pad)/(zMax-zMin));
+    const offX=pad+((w-2*pad)-(yMax-yMin)*scale)/2, offY=pad+((h-2*pad)-(zMax-zMin)*scale)/2;
+    const S=y=>offX+(y-yMin)*scale, Z=z=>offY+(zMax-z)*scale;
+    const Lpx=Lm*scale, ct=Math.cos(theta), st=Math.sin(theta);
+    const cx0=S(yc), cy0=Z(zc);
+    const R=(lx,ly)=>[cx0+lx*ct-ly*st, cy0+lx*st+ly*ct];   // rocket-local px → screen
+    const nose=R(0,-Lpx), base=R(0,Lpx);                    // base = thrust point (arm = L)
+    const bodyUp=[st,-ct], thrUp=[Math.sin(theta+psi),-Math.cos(theta+psi)];
+
+    // ---- faint world grid ----
+    ctx.lineWidth=1;
+    for(let g=Math.ceil(yMin/5)*5; g<=yMax; g+=5){ ctx.strokeStyle='rgba(138,166,198,.05)';
+      ctx.beginPath(); ctx.moveTo(S(g),Z(zMax)); ctx.lineTo(S(g),Z(zMin)); ctx.stroke(); }
+    for(let g=Math.ceil(zMin/5)*5; g<=zMax; g+=5){ ctx.strokeStyle='rgba(138,166,198,.05)';
+      ctx.beginPath(); ctx.moveTo(S(yMin),Z(g)); ctx.lineTo(S(yMax),Z(g)); ctx.stroke(); }
+
+    // ---- ground + landing pad ----
+    const zg=Z(0);
+    const gg=ctx.createLinearGradient(0,zg,0,h); gg.addColorStop(0,'#123a2a'); gg.addColorStop(1,'#0a1f16');
+    ctx.fillStyle=gg; ctx.fillRect(0,zg,w,h-zg);
+    ctx.strokeStyle='#2f6b48'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(0,zg); ctx.lineTo(w,zg); ctx.stroke();
+    ctx.strokeStyle=C.maize; ctx.lineWidth=5; ctx.beginPath();
+    ctx.moveTo(S(Math.max(yMin,-20)),zg); ctx.lineTo(S(Math.min(yMax,20)),zg); ctx.stroke();
+    txt(ctx,'landing pad',S(0),zg+14,'rgba(255,203,5,.75)',11,'center');
+
+    // ---- inertial frame + position guides (behind the rocket) ----
+    const O=[S(0),Z(0)];
+    ctx.setLineDash([]);
+    arrow(ctx,O[0],O[1],S(yMax-0.5),Z(0),C.muted,1.5,7);           // y axis →
+    arrow(ctx,O[0],O[1],S(0),Z(zMax-0.5),C.muted,1.5,7);           // z axis ↑
+    txt(ctx,'y',S(yMax-0.5),Z(0)-12,C.muted,13,'center');
+    txt(ctx,'z',S(0)+12,Z(zMax-0.4),C.muted,13,'center');
+    txt(ctx,'O',O[0]-9,O[1]-10,C.muted,12,'center');
+    ctx.setLineDash([5,4]); ctx.strokeStyle='rgba(87,199,255,.55)'; ctx.lineWidth=1.3;
+    ctx.beginPath(); ctx.moveTo(S(0),Z(zc)); ctx.lineTo(cx0,cy0); ctx.stroke();   // z: across to CoM height
+    ctx.beginPath(); ctx.moveTo(S(0),Z(0)); ctx.lineTo(S(0),Z(zc)); ctx.stroke(); // z on the axis
+    ctx.beginPath(); ctx.moveTo(S(yc),Z(0)); ctx.lineTo(cx0,cy0); ctx.stroke();   // y: up to CoM
+    ctx.beginPath(); ctx.moveTo(S(0),Z(0)); ctx.lineTo(S(yc),Z(0)); ctx.stroke(); // y on the ground
+    ctx.setLineDash([]);
+    txt(ctx,'z',S(0)-12,Z(zc/2),C.cyan,13,'center');
+    txt(ctx,'y',S(2.4),Z(0)-11,C.cyan,13,'center');
+
+    // ---- ROCKET (hand-drawn, same style as the workbench) ----
+    ctx.save(); ctx.translate(cx0,cy0); ctx.rotate(theta);
+    const bw=0.2*Lpx;
+    const grad=ctx.createLinearGradient(-bw,0,bw,0);
+    grad.addColorStop(0,'#c9d6e6'); grad.addColorStop(.5,'#eef4fb'); grad.addColorStop(1,'#9fb0c6');
+    ctx.fillStyle=grad; ctx.strokeStyle='#33465e'; ctx.lineWidth=1.2;
+    ctx.beginPath();
+    ctx.moveTo(-bw,Lpx);
+    ctx.lineTo(-bw,-0.55*Lpx);
+    ctx.quadraticCurveTo(-bw,-Lpx,0,-Lpx);
+    ctx.quadraticCurveTo(bw,-Lpx,bw,-0.55*Lpx);
+    ctx.lineTo(bw,Lpx);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=C.navy; ctx.fillRect(-bw,-0.12*Lpx,2*bw,0.26*Lpx);           // band
+    ctx.fillStyle='#7f93ad';                                                    // fins
+    ctx.beginPath(); ctx.moveTo(-bw,0.6*Lpx); ctx.lineTo(-bw-0.9*bw,Lpx); ctx.lineTo(-bw,Lpx); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(bw,0.6*Lpx); ctx.lineTo(bw+0.9*bw,Lpx); ctx.lineTo(bw,Lpx); ctx.closePath(); ctx.fill();
+    // nozzle + flame (gimballed by psi)
+    ctx.translate(0,Lpx); ctx.rotate(psi);
+    ctx.fillStyle='#4a5b73';
+    ctx.beginPath(); ctx.moveTo(-0.55*bw,0); ctx.lineTo(0.55*bw,0); ctx.lineTo(0.9*bw,0.7*bw); ctx.lineTo(-0.9*bw,0.7*bw); ctx.closePath(); ctx.fill();
+    const fl=2.6*bw, fg=ctx.createLinearGradient(0,0.7*bw,0,0.7*bw+fl);
+    fg.addColorStop(0,'#FFF3C4'); fg.addColorStop(.35,C.maize); fg.addColorStop(.7,'#FF7A1A'); fg.addColorStop(1,'rgba(255,80,0,0)');
+    ctx.fillStyle=fg; ctx.beginPath(); ctx.moveTo(-0.9*bw,0.7*bw);
+    ctx.quadraticCurveTo(0,0.7*bw+fl*0.5,0,0.7*bw+fl); ctx.quadraticCurveTo(0,0.7*bw+fl*0.5,0.9*bw,0.7*bw); ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    // ---- L dimension: CoM → nozzle (moment arm), offset clear of the fins ----
+    const pL=[-ct,-st];                                        // unit ⟂ pointing left-up
+    const o=56, cA=[cx0+pL[0]*o,cy0+pL[1]*o], bA=[base[0]+pL[0]*o,base[1]+pL[1]*o];
+    ctx.strokeStyle=C.muted; ctx.lineWidth=1.3; ctx.setLineDash([]);
+    arrow(ctx,cA[0],cA[1],bA[0],bA[1],C.muted,1.3,6);          // double-headed dimension
+    arrow(ctx,bA[0],bA[1],cA[0],cA[1],C.muted,1.3,6);
+    txt(ctx,'L',(cA[0]+bA[0])/2+pL[0]*12,(cA[1]+bA[1])/2+pL[1]*12,C.ink,14,'center');
+
+    // ---- local vertical + θ arc (at CoM) ----
+    ctx.setLineDash([4,4]); ctx.strokeStyle='rgba(234,241,251,.45)'; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(cx0,cy0); ctx.lineTo(cx0,cy0-1.05*Lpx); ctx.stroke();
+    ctx.setLineDash([]);
+    const aVert=-Math.PI/2, aBody=Math.atan2(bodyUp[1],bodyUp[0]);
+    let am=arc(ctx,cx0,cy0,0.72*Lpx,aVert,aBody,C.cyan,1.8);
+    txt(ctx,'θ',cx0+1.02*Lpx*Math.cos(am),cy0+1.02*Lpx*Math.sin(am),C.cyan,15,'center');
+
+    // ---- body centerline through base + ψ arc (at nozzle) ----
+    ctx.setLineDash([4,4]); ctx.strokeStyle='rgba(234,241,251,.42)'; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(nose[0],nose[1]);
+    ctx.lineTo(base[0]-bodyUp[0]*0.85*Lpx,base[1]-bodyUp[1]*0.85*Lpx); ctx.stroke();
+    ctx.setLineDash([]);
+    const aBodyDn=Math.atan2(-bodyUp[1],-bodyUp[0]), aThrDn=Math.atan2(-thrUp[1],-thrUp[0]);
+    let pm=arc(ctx,base[0],base[1],0.62*Lpx,aBodyDn,aThrDn,C.cyan,1.8);
+    txt(ctx,'ψ',base[0]+0.85*Lpx*Math.cos(pm),base[1]+0.85*Lpx*Math.sin(pm),C.cyan,15,'center');
+
+    // ---- thrust force f_T (up the gimballed axis) ----
+    const tip=[base[0]+thrUp[0]*1.75*Lpx, base[1]+thrUp[1]*1.75*Lpx];
+    arrow(ctx,base[0],base[1],tip[0],tip[1],C.maize,3,10);
+    txt(ctx,'f',tip[0]+8,tip[1]-6,C.maize,15,'left');
+    txt(ctx,'T',tip[0]+16,tip[1]-1,C.maize,10,'left');
+
+    // ---- gimbal torque τ (curved arrow at the pivot) ----
+    const a0=aThrDn-0.5;
+    let tm=arc(ctx,base[0],base[1],0.34*Lpx,a0,a0-1.5,C.maize,2.4);
+    const te=a0-1.5, ex=base[0]+0.34*Lpx*Math.cos(te), ey=base[1]+0.34*Lpx*Math.sin(te);
+    const tang=te-Math.PI/2;
+    ctx.fillStyle=C.maize; ctx.beginPath(); ctx.moveTo(ex,ey);
+    ctx.lineTo(ex-9*Math.cos(tang-0.42),ey-9*Math.sin(tang-0.42));
+    ctx.lineTo(ex-9*Math.cos(tang+0.42),ey-9*Math.sin(tang+0.42)); ctx.closePath(); ctx.fill();
+    txt(ctx,'τ',base[0]+0.34*Lpx*Math.cos(tm)-2,base[1]+0.34*Lpx*Math.sin(tm)+2,C.maize,15,'center');
+
+    // ---- weight m·g (down at CoM) ----
+    const gtip=[cx0,cy0+1.25*Lpx];
+    arrow(ctx,cx0,cy0,gtip[0],gtip[1],C.warm,2.4,9);
+    txt(ctx,'m g',gtip[0]+12,gtip[1]-2,C.warm,14,'left');
+
+    // ---- velocity v=(ẏ,ż) and spin θ̇ (green rates) ----
+    const vv=[-0.34,-1], vn=Math.hypot(vv[0],vv[1]), vt=[cx0+vv[0]/vn*1.15*Lpx, cy0+vv[1]/vn*1.15*Lpx];
+    arrow(ctx,cx0,cy0,vt[0],vt[1],C.good,2.2,9);
+    txt(ctx,'v = (ẏ, ż)',vt[0]-6,vt[1]-10,C.good,13,'right');
+    const sr=0.34*Lpx, sa=arc(ctx,nose[0],nose[1],sr,-2.5,-0.4,C.good,2);
+    const se=-0.4, sx=nose[0]+sr*Math.cos(se), sy2=nose[1]+sr*Math.sin(se), stan=se+Math.PI/2;
+    ctx.fillStyle=C.good; ctx.beginPath(); ctx.moveTo(sx,sy2);
+    ctx.lineTo(sx-8*Math.cos(stan-0.42),sy2-8*Math.sin(stan-0.42));
+    ctx.lineTo(sx-8*Math.cos(stan+0.42),sy2-8*Math.sin(stan+0.42)); ctx.closePath(); ctx.fill();
+    txt(ctx,'θ̇',nose[0]+sr*Math.cos(sa)+2,nose[1]+sr*Math.sin(sa)-8,C.good,13,'center');
+
+    // ---- z_bottom (feet to ground), label to the right of the line ----
+    ctx.setLineDash([4,4]); ctx.strokeStyle='rgba(159,176,198,.8)'; ctx.lineWidth=1.3;
+    ctx.beginPath(); ctx.moveTo(base[0],base[1]); ctx.lineTo(base[0],zg); ctx.stroke();
+    ctx.setLineDash([]);
+    txt(ctx,'z',base[0]+6,(base[1]+zg)/2,C.muted,12,'left');
+    txt(ctx,'bottom',base[0]+13,(base[1]+zg)/2+7,C.muted,9,'left');
+
+    // ---- CoM marker + label (m, J live here; J_T, v_e in the legend) ----
+    ctx.fillStyle=C.ink; ctx.strokeStyle=C.navy; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(cx0,cy0,5,0,7); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx0-7,cy0); ctx.lineTo(cx0+7,cy0);
+    ctx.moveTo(cx0,cy0-7); ctx.lineTo(cx0,cy0+7); ctx.stroke();
+    txt(ctx,'center of mass  (m, J)',cx0+11,cy0-2,C.ink,12,'left');
+  }
+
+  draw();
+  let raf; addEventListener('resize',()=>{ cancelAnimationFrame(raf); raf=requestAnimationFrame(draw); });
+})();
 </script>
 </body>
 </html>
