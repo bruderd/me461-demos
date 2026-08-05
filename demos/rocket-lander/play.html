@@ -575,7 +575,11 @@ function drawOnboard(sample){
   ctx.fillStyle='rgba(234,241,251,.85)'; ctx.font='600 12px ui-monospace,monospace';
   ctx.fillText('alt '+zbottom([y,z,theta,psi]).toFixed(1)+' m', 12, 20);
 
-  // rocket
+  // rocket — replaced by its fireball once this trial has ended in a crash
+  if(boom.trial>=0 && boom.trial===curTrial){
+    drawBoom(ctx, sx(y), sy(z), Lpx, boom.age/BOOM_DUR);
+    return;
+  }
   ctx.save();
   ctx.translate(sx(y),sy(z));
   ctx.rotate(-theta);
@@ -612,6 +616,71 @@ function drawOnboard(sample){
     ctx.fillStyle=fg;
     ctx.beginPath(); ctx.moveTo(-fw,bw*0.7); ctx.quadraticCurveTo(0,bw*0.7+fl*0.5,0,bw*0.7+fl);
     ctx.quadraticCurveTo(0,bw*0.7+fl*0.5,fw,bw*0.7); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ---- explosion (played when a trial ends in a crash — any failure but a timeout) ----
+const BOOM_DUR = 1.15;                                 // animation length (s, scaled by playback speed)
+let boom = { trial:-1, age:0, parts:null };            // trial===curTrial ⇒ show blast, hide the rocket
+function buildBoomParts(trial){                        // seeded so the debris is stable per trial
+  const rnd=mulberry32((0x9E3779B1 ^ (trial*2654435761))>>>0);
+  const chunkCols=['#c9d6e6','#9fb0c6','#7f93ad','#0A1B33','#33465e','#eef4fb'];  // hull fragments
+  const sparkCols=['#FFF3C4','#FFCB05','#FF7A1A','#FF5000'];
+  const parts=[];
+  for(let i=0;i<14;i++) parts.push({kind:'chunk',ang:rnd()*6.2832,spd:1.4+rnd()*4.6,
+    grav:2.2+rnd()*3.4,size:0.16+rnd()*0.30,rot:rnd()*6.2832,spin:rnd()*2-1,col:chunkCols[(rnd()*chunkCols.length)|0]});
+  for(let i=0;i<24;i++) parts.push({kind:'spark',ang:rnd()*6.2832,spd:3+rnd()*6.5,
+    len:0.30+rnd()*0.8,col:sparkCols[(rnd()*sparkCols.length)|0]});
+  for(let i=0;i<5;i++)  parts.push({kind:'smoke',ang:rnd()*6.2832,off:rnd()*0.5,rise:0.6+rnd()*0.9,grow:1+rnd()*1.4});
+  return parts;
+}
+// te may exceed 1 (frozen aftermath): te<1 blast, te≳1 leaves lingering smoke so the wreck reads as smouldering.
+function drawBoom(ctx,cx,cy,unit,teRaw){
+  const te=Math.max(0,teRaw), blast=Math.min(te,1), ease=1-(1-blast)*(1-blast);
+  const parts=boom.parts||[];
+  ctx.save(); ctx.translate(cx,cy);
+  // rising smoke — drawn first (behind the fire) and it persists into the aftermath
+  for(const p of parts){ if(p.kind!=='smoke') continue;
+    const rise=Math.min(te,1.6);
+    const px=Math.cos(p.ang)*p.off*unit, py=-unit*(0.2+p.rise*2.2*rise)+Math.sin(p.ang)*p.off*unit;
+    const rr=unit*(0.5+p.grow*1.7*rise);
+    const a=0.32*Math.max(0,Math.min(1,te*2))*Math.max(0,1-(te-0.4)/1.3);
+    if(a<=0) continue;
+    const gs=ctx.createRadialGradient(px,py,0,px,py,rr);
+    gs.addColorStop(0,`rgba(74,80,92,${a})`); gs.addColorStop(1,'rgba(40,44,54,0)');
+    ctx.fillStyle=gs; ctx.beginPath(); ctx.arc(px,py,rr,0,7); ctx.fill();
+  }
+  if(blast<1){
+    if(blast<0.85){                                    // shockwave ring
+      const rr=unit*(0.4+6*ease);
+      ctx.globalAlpha=0.55*(1-blast/0.85); ctx.strokeStyle='#FFE9A8';
+      ctx.lineWidth=Math.max(1,unit*0.16*(1-blast)); ctx.beginPath(); ctx.arc(0,0,rr,0,7); ctx.stroke(); ctx.globalAlpha=1;
+    }
+    const fr=unit*(0.5+2.6*ease), a=1-blast;            // fireball
+    const gf=ctx.createRadialGradient(0,0,0,0,0,fr);
+    gf.addColorStop(0,`rgba(255,255,238,${0.95*a})`); gf.addColorStop(.25,`rgba(255,203,5,${0.92*a})`);
+    gf.addColorStop(.55,`rgba(255,122,26,${0.78*a})`); gf.addColorStop(.85,`rgba(198,42,10,${0.5*a})`);
+    gf.addColorStop(1,'rgba(120,20,0,0)');
+    ctx.fillStyle=gf; ctx.beginPath(); ctx.arc(0,0,fr,0,7); ctx.fill();
+    if(blast<0.18){                                    // white flash
+      const f=1-blast/0.18; ctx.globalAlpha=0.9*f; ctx.fillStyle='#fff';
+      ctx.beginPath(); ctx.arc(0,0,unit*(1.1+6*blast),0,7); ctx.fill(); ctx.globalAlpha=1;
+    }
+    for(const p of parts){                             // debris chunks + sparks
+      if(p.kind==='chunk'){
+        const dist=p.spd*unit*blast, px=Math.cos(p.ang)*dist, py=Math.sin(p.ang)*dist+p.grav*unit*blast*blast;
+        ctx.globalAlpha=Math.max(0,1-blast*0.9);
+        ctx.save(); ctx.translate(px,py); ctx.rotate(p.rot+p.spin*blast*7);
+        ctx.fillStyle=p.col; const s=p.size*unit; ctx.fillRect(-s/2,-s/2,s,s*0.72); ctx.restore();
+      } else if(p.kind==='spark' && blast<0.6){
+        const dist=p.spd*unit*blast, px=Math.cos(p.ang)*dist, py=Math.sin(p.ang)*dist;
+        const tx=Math.cos(p.ang)*p.len*unit, ty=Math.sin(p.ang)*p.len*unit;
+        ctx.globalAlpha=1-blast/0.6; ctx.strokeStyle=p.col; ctx.lineWidth=1.5;
+        ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(px-tx,py-ty); ctx.stroke();
+      }
+    }
+    ctx.globalAlpha=1;
   }
   ctx.restore();
 }
@@ -678,6 +747,10 @@ function drawMapFrame(curTrial,curIdx){
     ctx.fillStyle='#fff'; ctx.strokeStyle=TERM_COLORS[curTrial]; ctx.lineWidth=2;
     ctx.beginPath(); ctx.arc(X(s[k][1]),Y(s[k][2]),3.5,0,7); ctx.fill(); ctx.stroke();
   }
+  if(boom.trial>=0 && boom.trial===curTrial){          // little burst at the crash site
+    const s=results[curTrial].samples, last=s[s.length-1];
+    drawBoom(ctx, X(last[1]), Y(last[2]), Math.max(5,Math.min(w,h)*0.02), boom.age/BOOM_DUR);
+  }
 }
 
 /* ============================================================================
@@ -686,19 +759,33 @@ function drawMapFrame(curTrial,curIdx){
 let playing=false, curTrial=0, playT=0, lastWall=0, speedMul=1, playMode='seq';
 const badge=()=>document.getElementById('statusBadge');
 function startPlayback(){                              // play all trials 1→10 in order
-  playMode='seq'; curTrial=0; playT=0; playing=true; lastWall=performance.now();
+  playMode='seq'; curTrial=0; playT=0; playing=true; lastWall=performance.now(); boom.trial=-1;
   badge().textContent='flying'; highlightRow(0); updateButtons();
 }
 function playTrial(i){                                 // replay a single trial (others shown as context)
   if(!results||!results[i]) return;
-  playMode='solo'; curTrial=i; playT=0; playing=true; lastWall=performance.now();
+  playMode='solo'; curTrial=i; playT=0; playing=true; lastWall=performance.now(); boom.trial=-1;
   badge().textContent='replay '+(i+1); highlightRow(i); updateButtons();
 }
 function skipAnimation(){                              // jump to the end: show every trace at once
   if(!results) return;
-  playMode='seq'; playing=false; curTrial=N_TRIALS-1;
+  playMode='seq'; playing=false; curTrial=N_TRIALS-1; boom.trial=-1;
   playT=results[curTrial].samples[results[curTrial].samples.length-1][0];
   badge().textContent='complete'; highlightRow(-1); updateButtons();
+}
+// a trial "fails" (and so earns an explosion) if it crashed or errored — but NOT if it merely timed out.
+function failedNotTimeout(i){ const r=results[i]; return r.exploded || (r.landed && !(r.score>0)); }
+// end the current trial: advance to the next one (sequential) or stop, freezing a crash into a smoulder.
+function finishTrial(){
+  const s=results[curTrial].samples;
+  if(playMode==='seq' && curTrial<N_TRIALS-1){
+    boom.trial=-1; curTrial++; playT=0; highlightRow(curTrial);
+  } else {
+    playing=false; playT=s[s.length-1][0]; badge().textContent='complete';
+    if(playMode==='seq') highlightRow(-1);
+    if(boom.trial===curTrial) boom.age=BOOM_DUR*1.3;   // leave the wreck smouldering, not un-exploded
+    updateButtons();
+  }
 }
 function curSample(){
   if(!results) return null;
@@ -712,14 +799,17 @@ function frame(now){
     if(playing){
       let dtWall=(now-lastWall)/1000; lastWall=now;
       if(!(dtWall>0)) dtWall=0; if(dtWall>0.1) dtWall=0.1;
-      playT+=dtWall*speedMul;
-      const s=results[curTrial]?.samples;
-      if(s && playT>=s[s.length-1][0]){               // finished the current trial
-        if(playMode==='seq' && curTrial<N_TRIALS-1){ curTrial++; playT=0; highlightRow(curTrial); }
-        else { playing=false; playT=s[s.length-1][0]; // end of sequence, or the single solo trial
-               badge().textContent='complete';
-               if(playMode==='seq') highlightRow(-1); // solo keeps its row highlighted
-               updateButtons(); }
+      if(boom.trial===curTrial){                      // a crash is exploding — hold here, then move on
+        boom.age+=dtWall*speedMul;
+        if(boom.age>=BOOM_DUR) finishTrial();
+      } else {
+        playT+=dtWall*speedMul;
+        const s=results[curTrial]?.samples;
+        if(s && playT>=s[s.length-1][0]){             // finished the current trial
+          playT=s[s.length-1][0];
+          if(failedNotTimeout(curTrial)){ boom.trial=curTrial; boom.age=0; boom.parts=buildBoomParts(curTrial); }
+          else finishTrial();
+        }
       }
     } else { lastWall=now; }
     const cs=curSample();
