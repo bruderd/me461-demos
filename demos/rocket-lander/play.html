@@ -299,38 +299,59 @@ function simulate(ctrl, ic){
    2. DEFAULT CONTROLLERS
    ============================================================================ */
 const DEFAULT_JS =
-`// ── Cascaded landing controller (a starting point — improve it!) ─────────
+`// ── Simple PID starting point: lands the 3 easiest trials, fails the rest — improve me!
 //  x : { y, z, theta, psi, ydot, zdot, thetadot, psidot, t, fuel, zbottom }
 //  p : { m, g, L, J, JT, ve, fTmax, tauMax }
 //  mem : {} persists across steps      dt : timestep (s)
 //  return { fT, tau }  —  thrust (N, 0..fTmax) and gimbal torque (N·m)
 
-const C = Math.cos(x.theta);
+// Desired state: upright, centered, at rest on the pad
+const xdes = { y:0, z:0, theta:0, psi:0, ydot:0, zdot:0, thetadot:0, psidot:0 };
 
-// 1) VERTICAL — track a descent-rate profile that eases off near the ground.
-//    Thrust keeps a floor so the gimbal always has torque authority.
-const vzTarget = -Math.max(1.2, Math.min(22, 0.8*Math.sqrt(Math.max(0, x.zbottom))));
-const azCmd = 1.6*(vzTarget - x.zdot);
-let fT = p.m*(p.g + azCmd) / Math.max(0.4, C);
-fT = Math.max(0.25*p.m*p.g, Math.min(p.fTmax, fT));
+// Integral-error accumulators (persist across steps within a trial via mem)
+mem.ei_y     ??= 0;
+mem.ei_z     ??= 0;
+mem.ei_theta ??= 0;
+mem.ei_psi   ??= 0;
 
-// 2) HORIZONTAL — lean toward the pad (y=0), but ONLY once we're roughly
-//    upright; if we're tipped over, priority is getting vertical again.
-//    ÿ = -(fT/m)·sin(psi+theta) ⇒ a positive tilt drives -y.
-const upright = Math.abs(x.theta) < 0.5;               // within ~29°
-const thetaTarget = upright
-  ? Math.max(-0.22, Math.min(0.22, 0.012*x.y + 0.05*x.ydot))
-  : 0;
+// proportional error
+const e_y     = xdes.y     - x.y;
+const e_z     = xdes.z     - x.z;
+const e_theta = xdes.theta - x.theta;
+const e_psi   = xdes.psi   - x.psi;
 
-// 3) ATTITUDE — pick the gimbal angle that makes the needed angular accel.
-//    theta_ddot = -(L/J)·fT·sin(psi) ⇒ sin(psi) = -theta_ddot·J/(L·fT)
-const thddCmd = 6*(thetaTarget - x.theta) - 5*x.thetadot;
-let sPsi = -thddCmd*p.J/(p.L*fT);
-sPsi = Math.max(-0.5, Math.min(0.5, sPsi));
-const psiTarget = Math.asin(sPsi);
+// accumulate integral error
+mem.ei_y     += e_y * dt;
+mem.ei_z     += e_z * dt;
+mem.ei_theta += e_theta * dt;
+mem.ei_psi   += e_psi * dt;
 
-// 4) GIMBAL SERVO — torque to slew psi toward psiTarget (fast inner loop).
-let tau = p.JT*(60*(psiTarget - x.psi) - 16*x.psidot);
+// derivative error
+const edot_y     = xdes.ydot     - x.ydot;
+const edot_z     = xdes.zdot     - x.zdot;
+const edot_theta = xdes.thetadot - x.thetadot;
+const edot_psi   = xdes.psidot   - x.psidot;
+
+// gain matrix K (2 x 12): rows [thrust dev; gimbal torque]
+// cols [ y,  z,  theta,  psi,  ydot,  zdot,  thetadot, psidot,  Iy, Iz, Itheta, Ipsi ]
+const K = [
+  [   0, -300,     0,     0,    0, -1200,        0,      0,   0, 0, 0, 0 ],
+  [ -25,    0,  5236, -7500, -160,     0,     2500,  -1300,   0, 0, 0, 0 ],
+];
+
+// augmented error vector (length 12): [P(4), D(4), I(4)]
+const evec = [
+  e_y, e_z, e_theta, e_psi,
+  edot_y, edot_z, edot_theta, edot_psi,
+  mem.ei_y, mem.ei_z, mem.ei_theta, mem.ei_psi,
+];
+
+// u_pid = -K · evec   (each row dotted with evec)
+const dot = (row) => row.reduce((s, k, i) => s + k*evec[i], 0);
+
+const uEq = p.m*p.g;         // gravity feedforward
+let fT  = uEq - dot(K[0]);   // thrust  = hover + vertical PD
+let tau = -dot(K[1]);        // gimbal torque
 
 return { fT, tau };`;
 
