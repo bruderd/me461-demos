@@ -336,32 +336,62 @@ return { fT, tau };`;
 
 const DEFAULT_PY =
 `import math
+import numpy as np
 
 def controller(x, p, mem, dt):
     # x : dict with y, z, theta, psi, ydot, zdot, thetadot, psidot, t, fuel, zbottom
     # p : dict with m, g, L, J, JT, ve, fTmax, tauMax
     # mem : dict that persists across calls      dt : timestep (s)
     # return (fT, tau)  --  thrust (N, 0..fTmax) and gimbal torque (N*m)
-    C = math.cos(x['theta'])
 
-    # 1) VERTICAL -- descent-rate profile that eases off near the ground.
-    vzTarget = -max(1.2, min(22, 0.8 * math.sqrt(max(0.0, x['zbottom']))))
-    azCmd = 1.6 * (vzTarget - x['zdot'])
-    fT = p['m'] * (p['g'] + azCmd) / max(0.4, C)
-    fT = max(0.25 * p['m'] * p['g'], min(p['fTmax'], fT))
+    # A simple PID starting point: lands the 3 easiest trials, fails the rest -- improve me!
+    # Desired state: upright, centered, at rest on the pad
+    xdes = dict.fromkeys(['y','z','theta','psi','ydot','zdot','thetadot','psidot'], 0)
 
-    # 2) HORIZONTAL -- lean toward the pad (y = 0), only once roughly upright.
-    upright = abs(x['theta']) < 0.5
-    thetaTarget = max(-0.22, min(0.22, 0.012 * x['y'] + 0.05 * x['ydot'])) if upright else 0.0
+    # Integral-error accumulators (persist across steps within a trial via mem)
+    mem['ei_y']     = mem.get('ei_y', 0.0)
+    mem['ei_z']     = mem.get('ei_z', 0.0)
+    mem['ei_theta'] = mem.get('ei_theta', 0.0)
+    mem['ei_psi']   = mem.get('ei_psi', 0.0)
 
-    # 3) ATTITUDE -- gimbal angle that makes the needed angular accel.
-    thddCmd = 6 * (thetaTarget - x['theta']) - 5 * x['thetadot']
-    sPsi = -thddCmd * p['J'] / (p['L'] * fT)
-    sPsi = max(-0.5, min(0.5, sPsi))
-    psiTarget = math.asin(sPsi)
+    # proportional error
+    e_y     = xdes['y']     - x['y']
+    e_z     = xdes['z']     - x['z']
+    e_theta = xdes['theta'] - x['theta']
+    e_psi   = xdes['psi']   - x['psi']
 
-    # 4) GIMBAL SERVO -- torque to slew psi toward psiTarget.
-    tau = p['JT'] * (60 * (psiTarget - x['psi']) - 16 * x['psidot'])
+    # accumulate integral error
+    mem['ei_y']     += e_y * dt
+    mem['ei_z']     += e_z * dt
+    mem['ei_theta'] += e_theta * dt
+    mem['ei_psi']   += e_psi * dt
+
+    # derivative error
+    edot_y     = xdes['ydot']     - x['ydot']
+    edot_z     = xdes['zdot']     - x['zdot']
+    edot_theta = xdes['thetadot'] - x['thetadot']
+    edot_psi   = xdes['psidot']   - x['psidot']
+
+    # gain matrix K (2 x 12): rows [thrust dev; gimbal torque]
+    # cols [ y,  z,  theta,  psi,  ydot,  zdot,  thetadot, psidot,  Iy, Iz, Itheta, Ipsi ]
+    K = np.array([
+        [   0, -300,     0,     0,    0, -1200,        0,      0,   0,  0,   0,   0 ],
+        [ -25,    0,  5236, -7500, -160,     0,     2500,  -1300,   0,  0,   0,   0 ],
+    ])
+
+    # augmented error vector (12 x 1): [P(4); D(4); I(4)]
+    evec = np.array([
+        [e_y],[e_z],[e_theta],[e_psi],
+        [edot_y],[edot_z],[edot_theta],[edot_psi],
+        [mem['ei_y']],[mem['ei_z']],[mem['ei_theta']],[mem['ei_psi']]
+    ])
+
+    m, g, L = p['m'], p['g'], p['L']
+    uEq = m * g                 # gravity feedforward
+
+    u_pid = -K @ evec           # (2 x 1)
+    fT  = uEq + u_pid[0, 0]     # thrust  = hover + vertical PD
+    tau = u_pid[1, 0]           # gimbal torque
 
     return (fT, tau)`;
 
